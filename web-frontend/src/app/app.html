@@ -1,9 +1,10 @@
-<h1>Angular + Go + Postgres (GORM)</h1>
+<mat-toolbar class="app-toolbar">
+  <span class="logo">Mr. Prop Bot</span>
+  <span class="spacer"></span>
 
-<form (submit)="$event.preventDefault(); create();">
-  <input [(ngModel)]="email" name="email" placeholder="email@example.com" />
-  <button type="submit">Add user</button>
-</form>
+  <button mat-icon-button (click)="theme.toggle()" aria-label="Toggle theme">
+    <mat-icon>{{ theme.isDark() ? 'light_mode' : 'dark_mode' }}</mat-icon>
+  </button>
+</mat-toolbar>
 
-<h3>Users</h3>
-<pre>{{ users$ | async | json }}</pre>
+<router-outlet />

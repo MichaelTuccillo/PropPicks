@@ -1,0 +1,13 @@
+.filters {
+  display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.grid {
+  display: grid; gap: 16px;
+  grid-template-columns: repeat( auto-fit, minmax(260px, 1fr) );
+}
+.card-head { display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px; }
+.title { font-weight: 600; font-size: 18px; }
+.stats { display:grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin: 8px 0 12px; }
+.stats span { display:block; font-size:12px; color: var(--muted); }
+.stats strong { font-size:16px; }

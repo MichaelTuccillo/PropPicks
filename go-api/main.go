@@ -23,7 +23,7 @@ func main() {
 	// Read DSN from env or fall back to local dev DSN
 	dsn := os.Getenv("DATABASE_DSN")
 	if dsn == "" {
-		dsn = "host=localhost user=postgres password= dbname=PropPicks port=5432 sslmode=disable TimeZone=UTC"
+		dsn = "host=localhost user=postgres password=Sammike31 dbname=PropPicks port=5432 sslmode=disable TimeZone=UTC"
 	}
 
 	// Connect
