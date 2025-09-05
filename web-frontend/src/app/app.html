@@ -1,0 +1,9 @@
+<h1>Angular + Go + Postgres (GORM)</h1>
+
+<form (submit)="$event.preventDefault(); create();">
+  <input [(ngModel)]="email" name="email" placeholder="email@example.com" />
+  <button type="submit">Add user</button>
+</form>
+
+<h3>Users</h3>
+<pre>{{ users$ | async | json }}</pre>
