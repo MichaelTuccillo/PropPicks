@@ -1,59 +1,48 @@
-
-// Include theming for Angular Material with `mat.theme()`.
-// This Sass mixin will define CSS variables that are used for styling Angular Material
-// components according to the Material 3 design spec.
-// Learn more about theming and how to use it for your application's
-// custom components at https://material.angular.dev/guide/theming
-@use '@angular/material' as mat;
-
-html {
-  @include mat.theme((
-    color: (
-      primary: mat.$azure-palette,
-      tertiary: mat.$blue-palette,
-    ),
-    typography: Roboto,
-    density: 0,
-  ));
-}
-
-body {
-  // Default the application to a light color theme. This can be changed to
-  // `dark` to enable the dark color theme, or to `light dark` to defer to the
-  // user's system settings.
-  color-scheme: light;
-
-  // Set a default background, font and text colors for the application using
-  // Angular Material's system-level CSS variables. Learn more about these
-  // variables at https://material.angular.dev/guide/system-variables
-  background-color: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface);
-  font: var(--mat-sys-body-medium);
-
-  // Reset the user agent margin.
-  margin: 0;
-}
-/* ---- Dark palette tokens ---- */
+/* ---------- THEME TOKENS ---------- */
+/* Light tokens (default) */
 :root {
-  --bg:        #0b1220; /* page background */
+  --bg:        #f6f8fb;
+  --bg-2:      #eef1f7;
+  --surface:   #ffffff;
+  --surface-2: #f9fafb;
+  --text:      #0f172a; /* slate-900 */
+  --muted:     #475569; /* slate-600 */
+  --border:    #e5e7eb; /* gray-200 */
+  --primary:   #7c3aed; /* violet-600 */
+  --success:   #16a34a;
+  --danger:    #dc2626;
+  --warning:   #eab308;
+  --teal:      #14b8a6;
+  --blue:      #2563eb;
+  --orange:    #fb923c;
+  --grid:      rgba(2, 6, 23, .08);
+
+  --radius: 16px;
+  --shadow: 0 10px 30px rgba(2, 6, 23, .08);
+}
+
+/* Dark tokens (applied when <body> has .dark) */
+body.dark {
+  --bg:        #0b1220;
   --bg-2:      #0a1020;
-  --surface:   #0f172a; /* cards / tables */
+  --surface:   #0f172a;
   --surface-2: #111a2e;
-  --text:      #e5e7eb; /* gray-200 */
-  --muted:     #94a3b8; /* slate-400 */
-  --border:    #1f2937; /* slate-800 */
-  --primary:   #8b5cf6; /* violet-500 */
+  --text:      #e5e7eb;
+  --muted:     #94a3b8;
+  --border:    #1f2937;
+  --primary:   #8b5cf6;
   --success:   #22c55e;
   --danger:    #f87171;
   --warning:   #eab308;
   --teal:      #2dd4bf;
   --blue:      #60a5fa;
   --orange:    #fb923c;
+  --grid:      rgba(255,255,255,.06);
 
-  --radius: 16px;
   --shadow: 0 10px 30px rgba(2, 6, 23, .35);
 }
 
+/* ---------- GLOBAL LOOK ---------- */
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
@@ -61,10 +50,10 @@ body {
   color: var(--text);
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
 
-  /* Cohesive gradient: subtle glow from top-center + vertical fade */
+  /* Single cohesive glow from top-center + vertical fade using current tokens */
   background:
     radial-gradient(1200px 540px at 50% -220px, color-mix(in oklab, var(--primary) 22%, transparent) 0%, transparent 70%),
-    linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 60%, #090e1a 100%);
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 60%, color-mix(in oklab, var(--bg) 92%, #000) 100%);
 }
 
 /* Layout helpers */
@@ -76,18 +65,16 @@ h1,h2,h3 { margin: 0 0 12px; font-weight: 700; }
 /* Toolbar */
 .app-toolbar {
   position: sticky; top: 0; z-index: 1000;
-  background: rgba(10, 16, 32, 0.75);
+  background: color-mix(in oklab, var(--bg) 60%, transparent);
   border-bottom: 1px solid var(--border);
   backdrop-filter: saturate(120%) blur(8px);
 }
-.logo { font-weight: 800; letter-spacing: .4px; }
-.spacer { flex: 1 1 auto; }
 
 /* Cards */
 .mat-mdc-card {
   background: linear-gradient(180deg, var(--surface), var(--surface-2)) !important;
   border: 1px solid var(--border);
-  border-radius: var(--radius) !important;
+  border-radius: 16px !important;
   box-shadow: var(--shadow);
 }
 
@@ -109,12 +96,50 @@ table.mat-mdc-table {
   background: linear-gradient(180deg, var(--surface), var(--surface-2));
 }
 .mdc-data-table__header-cell { color: var(--muted); text-transform: uppercase; font-size: 12px; letter-spacing: .4px; }
-.mdc-data-table__row:nth-child(even) { background: rgba(255,255,255,.02); }
-.mdc-data-table__row:hover { background: rgba(255,255,255,.04); }
+.mdc-data-table__row:nth-child(even) { background: color-mix(in oklab, var(--surface) 92%, var(--bg)); }
+.mdc-data-table__row:hover { background: color-mix(in oklab, var(--surface) 86%, var(--bg)); }
 
 /* Utilities */
 .pos { color: var(--success) !important; }
 .neg { color: var(--danger) !important; }
 
-html, body { height: 100%; }
-body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
+/* Ensure table body text follows the theme tokens */
+table.mat-mdc-table .mat-mdc-cell,
+table.mat-mdc-table .mat-mdc-footer-cell {
+  color: var(--text) !important;
+}
+
+/* (optional) checkbox label + small form labels follow theme */
+.mdc-form-field,
+.mat-mdc-checkbox .mdc-form-field {
+  color: var(--text);
+}
+
+/* Material select panel should look like cards (not transparent) */
+.mat-mdc-select-panel {
+  background: linear-gradient(180deg, var(--surface), var(--surface-2)) !important;
+  border: 1px solid var(--border);
+}
+.mat-mdc-option .mdc-list-item__primary-text { color: var(--text) !important; }
+.mat-mdc-option.mdc-list-item--selected { background: color-mix(in oklab, var(--primary) 10%, transparent) !important; }
+.mat-mdc-option.mdc-list-item:hover { background: color-mix(in oklab, var(--surface) 88%, var(--bg)) !important; }
+
+.app-toolbar {
+  display: flex;            /* ensure the row is flex */
+  gap: 8px;
+  padding-inline: 12px;
+}
+
+.app-toolbar .brand {
+  font-weight: 800;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.app-toolbar .spacer {
+  flex: 1 1 auto;           /* pushes the rest to the right */
+}
+
+.app-toolbar a.active {
+  text-decoration: underline; /* optional active style */
+}

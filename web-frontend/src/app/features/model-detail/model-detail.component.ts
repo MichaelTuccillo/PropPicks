@@ -1,6 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { AsyncPipe, DatePipe, DecimalPipe, NgFor, NgIf, isPlatformBrowser } from '@angular/common';
+import { NgFor, NgIf, DatePipe, DecimalPipe, isPlatformBrowser } from '@angular/common';
 import { PLATFORM_ID } from '@angular/core';
 import { MockDataService } from '../../shared/mock-data.service';
 import { BetRow } from '../../shared/types';
@@ -17,7 +17,7 @@ import { ChartConfiguration } from 'chart.js';
   selector: 'app-model-detail',
   standalone: true,
   imports: [
-    NgFor, NgIf, AsyncPipe, DatePipe, DecimalPipe,
+    NgFor, NgIf, DatePipe, DecimalPipe,
     MatCardModule, MatButtonModule, MatIconModule, MatChipsModule, MatTableModule, NgChartsModule
   ],
   templateUrl: './model-detail.component.html',
@@ -42,15 +42,21 @@ export class ModelDetailComponent {
       datasets: [{
         label: 'Equity (units, last N bets)',
         data: this.equity.map(p => p.value),
+        borderColor: '#60a5fa',
+        backgroundColor: 'transparent',
         tension: 0.3,
-        borderWidth: 3,
+        borderWidth: 2.5,
         pointRadius: 0
       }]
     },
     options: {
       responsive: true,
-      plugins: { legend: { position: 'bottom' } },
-      scales: { x: { grid: { display: false } } }
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8' } } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: '#94a3b8' } },
+        y: { grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: '#94a3b8' } }
+      }
     }
   };
 

@@ -1,0 +1,147 @@
+<div class="page">
+  <mat-card class="panel">
+    <h2 class="h">Parameters</h2>
+
+    <!-- Sport -->
+    <div class="row">
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Sport*</mat-label>
+        <mat-select [value]="sport()" (valueChange)="setSport($event)">
+          <mat-option *ngFor="let s of sports" [value]="s">{{ s }}</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+
+    <!-- Bet type -->
+    <div class="row">
+      <div class="full">
+        <label class="field-label">Bet type</label>
+        <mat-button-toggle-group [value]="mode()" (valueChange)="setMode($event)">
+          <mat-button-toggle value="Single">Single</mat-button-toggle>
+          <mat-button-toggle value="SGP">SGP</mat-button-toggle>
+          <mat-button-toggle value="SGP+">SGP+</mat-button-toggle>
+        </mat-button-toggle-group>
+      </div>
+    </div>
+
+    <!-- Legs + Slips -->
+    <div class="row">
+      <mat-form-field appearance="outline" class="half">
+        <mat-label>Legs</mat-label>
+        <input matInput type="number"
+               [disabled]="mode()==='Single'"
+               [value]="mode()==='Single' ? 1 : legs()"
+               (input)="onLegsInput($event)">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="half">
+        <mat-label># Slips</mat-label>
+        <input matInput type="number" [value]="slips()" (input)="onSlipsInput($event)">
+      </mat-form-field>
+    </div>
+
+    <!-- Presets (inline + compact) -->
+    <div class="row presets-inline">
+      <span class="muted">Presets:</span>
+      <button mat-stroked-button class="preset-btn" (click)="setPreset('safe')">Safe</button>
+      <button mat-stroked-button class="preset-btn" (click)="setPreset('balanced')">Balanced</button>
+      <button mat-stroked-button color="primary" class="preset-btn" (click)="setPreset('longshot')">Longshot</button>
+    </div>
+
+    <!-- Odds -->
+    <div class="row">
+        <mat-form-field appearance="outline" class="half">
+            <mat-label>Min odds (American)</mat-label>
+            <input
+            matInput
+            type="number"
+            [attr.step]="5"
+            [value]="minOdds()"
+            (input)="onOddsInput('min', $event)"
+            />
+            <mat-error *ngIf="oddsInvalid('min')">
+            Odds cannot be between −100 and +100.
+            </mat-error>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="half">
+            <mat-label>Max odds (American)</mat-label>
+            <input
+            matInput
+            type="number"
+            [attr.step]="5"
+            [value]="maxOdds()"
+            (input)="onOddsInput('max', $event)"
+            />
+            <mat-error *ngIf="oddsInvalid('max')">
+            Odds cannot be between −100 and +100.
+            </mat-error>
+        </mat-form-field>
+    </div>
+
+    <!-- Models -->
+    <div class="row models-head">
+      <h3 class="sub">Models</h3>
+      <div class="actions">
+        <a (click)="selectAllModels()">Select all</a>
+        <a (click)="clearModels()">Clear</a>
+      </div>
+    </div>
+
+    <div class="row checks">
+      <label class="check" *ngFor="let m of models(); trackBy: trackModel">
+        <mat-checkbox
+          [checked]="selectedIds().has(m.id)"
+          (change)="toggleModel(m.id, $event.checked)">
+        </mat-checkbox>
+        <span>{{ m.name }}</span>
+      </label>
+    </div>
+
+    <div class="cta-row">
+        <div class="hint muted" *ngIf="!canGenerate()">
+            Select at least one model and enter valid odds (no values between −100 and +100).
+        </div>
+
+        <button
+            mat-stroked-button
+            class="clear-btn small"
+            (click)="clearResults()"
+            *ngIf="slipsOut()"
+        >
+            <mat-icon>clear</mat-icon>
+            Clear
+        </button>
+
+        <button
+            mat-raised-button
+            color="primary"
+            class="generate-btn small"
+            [disabled]="!canGenerate()"
+            (click)="generate()"
+        >
+            <mat-icon>auto_awesome</mat-icon>
+            Generate bets
+        </button>
+        </div>
+  </mat-card>
+
+  <!-- Results appear below -->
+  <mat-card class="panel" *ngIf="slipsOut() as slips">
+    <div class="results">
+      <h3 class="sub">Generated slips</h3>
+      <div class="slip" *ngFor="let s of slips; index as i">
+        <div class="head">Slip {{ i+1 }} — {{ s.odds }} ({{ s.legs.length }} legs)</div>
+        <ul class="legs">
+          <li *ngFor="let l of s.legs; index as j">
+            {{ j+1 }}) {{ l.player }} — {{ l.market }} {{ getSelection(l) }} ({{ l.odds }})
+          </li>
+        </ul>
+        <div class="why" *ngIf="s.rationale?.length">
+          <div class="muted">Why:</div>
+          <ul><li *ngFor="let r of s.rationale">{{ r }}</li></ul>
+        </div>
+      </div>
+    </div>
+  </mat-card>
+</div>

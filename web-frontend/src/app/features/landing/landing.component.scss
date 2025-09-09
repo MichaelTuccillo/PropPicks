@@ -1,0 +1,26 @@
+.hero {
+  padding: 72px 24px 48px;
+  background:
+    radial-gradient(900px 360px at 50% -140px, color-mix(in oklab, var(--primary) 22%, transparent) 0%, transparent 70%),
+    linear-gradient(180deg, var(--bg), var(--bg-2));
+
+  .inner { max-width: 1100px; margin: 0 auto; text-align: center; }
+  h1 { font-size: 40px; font-weight: 800; margin: 0 0 10px; }
+  p { color: var(--muted); margin: 0 auto 18px; max-width: 720px; }
+  .ctas { display: flex; gap: 12px; justify-content: center; }
+}
+
+.selling {
+  padding: 24px;
+  .grid {
+    max-width: 1100px; margin: 0 auto;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(240px,1fr)); gap: 16px;
+  }
+  .point {
+    border: 1px solid var(--border); border-radius: 16px;
+    background: linear-gradient(180deg, var(--surface), var(--surface-2));
+    padding: 16px;
+    h3 { margin: 0 0 6px; }
+    p { margin: 0; color: var(--muted); }
+  }
+}

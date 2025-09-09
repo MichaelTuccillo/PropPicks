@@ -12,13 +12,11 @@ export class ThemeService {
   isDark = signal(false);
 
   constructor() {
-    if (!this.inBrowser) return; // <-- SSR: do nothing
-
+    if (!this.inBrowser) return;
     const saved = safeGet(KEY);
-    const prefers =
-      typeof window !== 'undefined' &&
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const prefers = typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
     this.isDark.set(saved != null ? saved === 'true' : !!prefers);
     this.apply();
@@ -26,13 +24,13 @@ export class ThemeService {
 
   toggle() {
     this.isDark.update(v => !v);
-    if (!this.inBrowser) return; // SSR guard
+    if (!this.inBrowser) return;
     safeSet(KEY, String(this.isDark()));
     this.apply();
   }
 
   private apply() {
-    if (!this.inBrowser) return; // SSR guard
+    if (!this.inBrowser) return;
     document.body.classList.toggle('dark', this.isDark());
   }
 }

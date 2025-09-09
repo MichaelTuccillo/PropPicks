@@ -18,15 +18,12 @@
     </mat-card>
   </div>
 
+  <!-- Equity curve -->
   <div class="section">
     <h3>Equity curve (last N bets)</h3>
-    <ng-container *ngIf="isBrowser">
-      <canvas baseChart
-        [data]="chartCfg.data"
-        [options]="chartCfg.options"
-        [type]="chartCfg.type">
-      </canvas>
-    </ng-container>
+    <div class="chart-wrap" *ngIf="isBrowser">
+      <canvas baseChart [data]="chartCfg.data" [options]="chartCfg.options" [type]="chartCfg.type"></canvas>
+    </div>
   </div>
 
   <!-- Bet log -->

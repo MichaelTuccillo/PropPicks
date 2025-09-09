@@ -1,0 +1,75 @@
+.page { padding: 24px; max-width: 1240px; margin: 0 auto; }
+.panel {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--surface), var(--surface-2));
+  box-shadow: var(--shadow);
+}
+
+.h { margin: 0 0 12px; }
+.sub { margin: 0; }
+.muted { color: var(--muted); }
+
+.row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.full { flex: 1 1 100%; }
+.half { flex: 1 1 480px; min-width: 280px; }
+
+.field-label { display: block; margin-bottom: 8px; color: var(--muted); }
+
+/* Presets inline + a bit more spacing */
+.presets-inline {
+  display: flex; align-items: center; gap: 14px; /* increased from 8px */
+  margin: 6px 0 6px;
+}
+.presets-inline .muted { margin-right: 4px; }
+.preset-btn.mat-mdc-button-base { height: 28px; padding: 0 12px; }
+.preset-btn .mdc-button__label {
+  font-size: 12px; font-weight: 600; letter-spacing: .3px;
+}
+
+/* Models */
+.models-head { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+.actions a { margin-left: 16px; cursor: pointer; }
+.checks { display: flex; flex-wrap: wrap; gap: 18px 28px; margin-top: 8px; }
+.check { display: flex; align-items: center; gap: 8px; }
+
+/* Right-aligned, borderless CTA row */
+.cta-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.cta-row .hint {
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+.right-actions { display: flex; gap: 10px; margin-left: auto; }
+
+.small.mat-mdc-raised-button,
+.small.mat-mdc-outlined-button,
+.small.mat-mdc-button-base {
+  height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+  line-height: 34px;
+}
+.generate-btn.mat-mdc-raised-button { font-weight: 700; }
+.generate-btn mat-icon, .clear-btn mat-icon { margin-right: 6px; }
+.hint { font-size: 12px; color: var(--muted); }
+
+/* Results */
+.results .slip { padding: 12px 0; border-top: 1px solid var(--border); }
+.results .slip:first-child { border-top: 0; }
+.results .head { font-weight: 600; margin-bottom: 6px; }
+.results .legs { margin: 6px 0 0 0; padding-left: 18px; }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .half { flex-basis: 100%; }
+  .right-actions { width: 100%; justify-content: flex-end; }
+}

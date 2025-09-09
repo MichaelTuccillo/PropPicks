@@ -1,0 +1,17 @@
+.auth {
+  min-height: calc(100dvh - 64px);
+  display: grid; place-items: center;
+  padding: 24px;
+}
+mat-card {
+  width: min(520px, 92vw);
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--surface), var(--surface-2));
+  border-radius: 16px;
+  padding: 20px 18px;
+}
+h2 { margin: 2px 0 12px; font-weight: 800; }
+.full { width: 100%; }
+mat-form-field { width: 100%; margin-bottom: 10px; }
+.alt { margin-top: 10px; color: var(--muted); }
+.alt a { text-decoration: none; }

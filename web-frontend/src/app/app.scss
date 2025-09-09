@@ -1,2 +1,7 @@
-.logo { font-weight: 700; letter-spacing: .3px; }
+.logo {
+  font-weight: 800;
+  letter-spacing: .3px;
+  font-size: 21px;   /* was smaller; bump size */
+  line-height: 1;
+}
 .spacer { flex: 1 1 auto; }

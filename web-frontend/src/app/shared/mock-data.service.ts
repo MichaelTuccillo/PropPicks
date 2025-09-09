@@ -3,7 +3,7 @@ import { BetRow, EquityPoint, ModelDetailStats, ModelSummary, Sport } from './ty
 
 @Injectable({ providedIn: 'root' })
 export class MockDataService {
-  sports: Sport[] = ['All', 'MLB', 'WNBA', 'NCAAF', 'ATP/WTA'];
+  sports: Sport[] = ['All', 'NFL', 'NHL', 'NBA', 'MLB', 'WNBA', 'NCAAF', 'ATP/WTA'];
   models: ModelSummary[] = [
     { id:'narrative',   name:'Narrative',   l14_wl:'18–12', l14_roi: 12.4, all_wl:'210–180', all_roi: 8.2 },
     { id:'weird',       name:'Weird',       l14_wl:'15–15', l14_roi:  2.1, all_wl:'205–198', all_roi: 3.7 },
@@ -12,14 +12,12 @@ export class MockDataService {
     { id:'micro',       name:'Micro-Edges', l14_wl:'17–13', l14_roi:  7.2, all_wl:'214–185', all_roi: 9.0 },
     { id:'pessimist',   name:'Pessimist',   l14_wl:'14–16', l14_roi: -1.9, all_wl:'200–201', all_roi:-0.5 },
     { id:'heatcheck',   name:'Heat-Check',  l14_wl:'18–12', l14_roi: 12.9, all_wl:'209–190', all_roi: 6.6 },
-  ].map(m => ({ ...m, selected: ['contrarian','micro'].includes(m.id) }));
+  ].map(m => ({ ...m, selected: ['contrarian','micro','narrative','weird','random','pessimist','heatcheck'].includes(m.id) }));
 
-  // pretend API state
   selectedSport = signal<Sport>('All');
   sgpMode = signal<'SGP' | 'SGP+'>('SGP');
 
-  getModelSummaries(sport: Sport, mode: 'SGP' | 'SGP+'): ModelSummary[] {
-    // In real app, filter by sport/mode; here just tweak numbers a bit:
+  getModelSummaries(sport: Sport, mode: 'Single' | 'SGP' | 'SGP+'): ModelSummary[] {
     const k = mode === 'SGP+' ? 1.15 : 1;
     return this.models.map(m => ({
       ...m,
@@ -29,12 +27,11 @@ export class MockDataService {
   }
 
   getCumulative(seriesIds: string[]): {label: string, data: EquityPoint[]}[] {
-    // 14-day toy series
     const labels = Array.from({length:14}, (_,i)=>`D-${14-i}`);
     return seriesIds.map((id, idx) => {
       let v = 0;
       const data = labels.map(() => {
-        v += (Math.random() - 0.45) * (idx % 2 ? 2 : 3); // toy drift
+        v += (Math.random() - 0.45) * (idx % 2 ? 2 : 3);
         return { label: '', value: +v.toFixed(2) };
       });
       return { label: this.models.find(m=>m.id===id)?.name || id, data };
@@ -42,7 +39,7 @@ export class MockDataService {
   }
 
   getRecentBets(limit = 12): BetRow[] {
-    const sports: Sport[] = ['MLB','WNBA','NCAAF','ATP/WTA'];
+    const sports: Sport[] = ['NFL', 'NHL', 'NBA', 'MLB','WNBA','NCAAF','ATP/WTA'];
     const models = this.models;
     const now = new Date();
     return Array.from({length: limit}).map((_,i) => {
@@ -78,7 +75,7 @@ export class MockDataService {
     });
   }
 
-  getModelBetLog(_id: string, n = 30): BetRow[] {
+  getModelBetLog(_id: string, n = 40): BetRow[] {
     return this.getRecentBets(n).map(b => ({ ...b, betType: Math.random()>0.5? 'Under' : 'Over' }));
   }
 }

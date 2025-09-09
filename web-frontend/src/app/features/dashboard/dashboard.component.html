@@ -1,5 +1,13 @@
 <div class="page">
-  <h1 class="page-title">MR. PROP BOT</h1>
+  <!-- Demo banner -->
+  <mat-card class="demo-banner" *ngIf="demo()">
+    <mat-icon aria-hidden="true">warning_amber</mat-icon>
+    <div>
+      <strong>Demo mode:</strong>
+      The charts and tables below use example data only and do not reflect real bets.
+    </div>
+  </mat-card>
+
   <!-- Filters -->
   <div class="filters">
     <mat-chip-listbox aria-label="Sport filter">
@@ -10,6 +18,7 @@
     </mat-chip-listbox>
 
     <mat-button-toggle-group [value]="mode()" (valueChange)="mode.set($event)">
+      <mat-button-toggle value="Single">Single</mat-button-toggle>
       <mat-button-toggle value="SGP">SGP</mat-button-toggle>
       <mat-button-toggle value="SGP+">SGP+</mat-button-toggle>
     </mat-button-toggle-group>
@@ -32,7 +41,9 @@
         <div><span>All-time ROI</span><strong [class.pos]="m.all_roi>=0" [class.neg]="m.all_roi<0">{{ m.all_roi }}%</strong></div>
       </div>
 
-      <mat-checkbox [checked]="m.selected" (change)="toggleModel(m.id, $event.checked)">
+      <mat-checkbox
+        [checked]="selectedIds().has(m.id)"
+        (change)="toggleModel(m.id, $event.checked)">
         Include in L14 chart
       </mat-checkbox>
     </mat-card>
@@ -41,29 +52,62 @@
   <!-- Cumulative % Gain (L14D) -->
   <div class="section">
     <h3>Cumulative % Gain (L14D)</h3>
-    <ng-container *ngIf="isBrowser">
-      <canvas baseChart
+    <div class="chart-wrap" *ngIf="isBrowser">
+      <canvas
+        baseChart
         [data]="lineCfg().data"
         [options]="lineCfg().options"
         [type]="lineCfg().type">
       </canvas>
-    </ng-container>
+    </div>
   </div>
 
   <!-- Recent Bets table -->
   <div class="section">
     <h3>Recent bets</h3>
-    <table mat-table [dataSource]="recent" class="mat-elevation-z1">
-      <ng-container matColumnDef="date"><th mat-header-cell *matHeaderCellDef>Date</th><td mat-cell *matCellDef="let r">{{ r.date | date:'MMM d, HH:mm' }}</td></ng-container>
-      <ng-container matColumnDef="model"><th mat-header-cell *matHeaderCellDef>Model</th><td mat-cell *matCellDef="let r">{{ r.modelName }}</td></ng-container>
-      <ng-container matColumnDef="sport"><th mat-header-cell *matHeaderCellDef>Sport</th><td mat-cell *matCellDef="let r">{{ r.sport }}</td></ng-container>
-      <ng-container matColumnDef="event"><th mat-header-cell *matHeaderCellDef>Event</th><td mat-cell *matCellDef="let r">{{ r.event }}</td></ng-container>
-      <ng-container matColumnDef="type"><th mat-header-cell *matHeaderCellDef>Type</th><td mat-cell *matCellDef="let r">{{ r.betType }}</td></ng-container>
-      <ng-container matColumnDef="odds"><th mat-header-cell *matHeaderCellDef>Odds</th><td mat-cell *matCellDef="let r">{{ r.combinedOdds }}</td></ng-container>
-      <ng-container matColumnDef="result"><th mat-header-cell *matHeaderCellDef>Result (u)</th><td mat-cell *matCellDef="let r"><span [class.pos]="r.resultUnits>=0" [class.neg]="r.resultUnits<0">{{ r.resultUnits | number:'1.2-2' }}</span></td></ng-container>
 
-      <tr mat-header-row *matHeaderRowDef="['date','model','sport','event','type','odds','result']"></tr>
-      <tr mat-row *matRowDef="let row; columns: ['date','model','sport','event','type','odds','result'];"></tr>
+    <table mat-table [dataSource]="recent" class="mat-elevation-z1 bets-table">
+        <ng-container matColumnDef="date">
+        <th mat-header-cell *matHeaderCellDef>Date</th>
+        <td mat-cell *matCellDef="let r">{{ r.date | date:'MMM d, HH:mm' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="model">
+        <th mat-header-cell *matHeaderCellDef>Model</th>
+        <td mat-cell *matCellDef="let r">{{ r.modelName }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="sport">
+        <th mat-header-cell *matHeaderCellDef>Sport</th>
+        <td mat-cell *matCellDef="let r">{{ r.sport }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="event">
+        <th mat-header-cell *matHeaderCellDef>Event</th>
+        <td mat-cell *matCellDef="let r">{{ r.event }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="type">
+        <th mat-header-cell *matHeaderCellDef>Type</th>
+        <td mat-cell *matCellDef="let r">{{ r.betType }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="odds">
+        <th mat-header-cell *matHeaderCellDef>Odds</th>
+        <td mat-cell *matCellDef="let r">{{ r.combinedOdds }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="result">
+        <th mat-header-cell *matHeaderCellDef>Result (u)</th>
+        <td mat-cell *matCellDef="let r">
+            <span [class.pos]="r.resultUnits >= 0" [class.neg]="r.resultUnits < 0">
+            {{ r.resultUnits | number:'1.2-2' }}
+            </span>
+        </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="['date','model','sport','event','type','odds','result']"></tr>
+        <tr mat-row *matRowDef="let row; columns: ['date','model','sport','event','type','odds','result'];"></tr>
     </table>
   </div>
-</div>
+

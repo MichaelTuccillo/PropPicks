@@ -1,10 +1,38 @@
-<mat-toolbar class="app-toolbar">
-  <span class="logo">Mr. Prop Bot</span>
+<mat-toolbar class="app-toolbar" color="transparent">
+  <!-- Brand (left) -->
+  <a class="brand" (click)="goHome()" role="button">Mr. Prop Bot</a>
+
+  <!-- Push everything else to the right -->
   <span class="spacer"></span>
 
-  <button mat-icon-button (click)="theme.toggle()" aria-label="Toggle theme">
-    <mat-icon>{{ theme.isDark() ? 'light_mode' : 'dark_mode' }}</mat-icon>
-  </button>
+  <!-- DEMO MODE: show app nav -->
+  <ng-container *ngIf="demo(); else guest">
+    <a mat-button routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
+    <a mat-button routerLink="/generate"  routerLinkActive="active">Generate</a>
+
+    <button mat-icon-button [matMenuTriggerFor]="menu" aria-label="Account">
+      <mat-icon>account_circle</mat-icon>
+    </button>
+    <mat-menu #menu="matMenu" panelClass="account-menu-panel" xPosition="after" yPosition="below">
+      <button mat-menu-item (click)="signOutDemo()">
+        <mat-icon>logout</mat-icon>
+        <span>Exit demo</span>
+      </button>
+    </mat-menu>
+
+    <button mat-icon-button *ngIf="theme" (click)="theme.toggle()" aria-label="Toggle theme">
+      <mat-icon>{{ theme.isDark() ? 'light_mode' : 'dark_mode' }}</mat-icon>
+    </button>
+  </ng-container>
+
+  <!-- GUEST (landing etc.): Sign in / Create account ONLY (no demo link) -->
+  <ng-template #guest>
+    <a mat-button routerLink="/sign-in" routerLinkActive="active">Sign in</a>
+    <a mat-stroked-button routerLink="/sign-up" routerLinkActive="active">Create account</a>
+    <button mat-icon-button *ngIf="theme" (click)="theme.toggle()" aria-label="Toggle theme">
+      <mat-icon>{{ theme.isDark() ? 'light_mode' : 'dark_mode' }}</mat-icon>
+    </button>
+  </ng-template>
 </mat-toolbar>
 
 <router-outlet />
