@@ -12,7 +12,7 @@ export class DemoStateService {
   constructor() {
     if (this.isBrowser) this._demo.set(sessionStorage.getItem('demo') === '1');
   }
-
+  
   enter() {
     this._demo.set(true);
     if (this.isBrowser) sessionStorage.setItem('demo', '1');

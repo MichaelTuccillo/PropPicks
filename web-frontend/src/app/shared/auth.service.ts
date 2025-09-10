@@ -1,49 +1,55 @@
-import { Injectable, inject, signal, computed } from '@angular/core';
-import { isPlatformBrowser } from '@angular/common';
-import { PLATFORM_ID } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../../environments/environment.development';
+import { firstValueFrom } from 'rxjs';
 
-type User = { email: string; name: string };
-
-const KEY = 'auth_user';
+export type User = {
+  id: string;
+  email: string;
+  display_name: string;
+  created_at: string;
+};
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly platformId = inject(PLATFORM_ID);
-  private readonly inBrowser = isPlatformBrowser(this.platformId);
+  private http = inject(HttpClient);
+  user = signal<User | null>(null);
 
-  private _user = signal<User | null>(null);
-  user = computed(() => this._user());
-  isAuthed = computed(() => !!this._user());
+  private base = `${environment.apiBase}/auth`; // e.g. '/api/auth' with proxy
 
-  constructor() {
-    if (!this.inBrowser) return;
+  async hydrate(): Promise<void> {
     try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) this._user.set(JSON.parse(raw));
-    } catch {}
+      const me = await firstValueFrom(this.http.get<User>(`${this.base}/me`, { withCredentials: true }));
+      this.user.set(me || null);
+    } catch {
+      this.user.set(null);
+    }
   }
 
-  async signIn(email: string, _password: string) {
-    // fake latency
-    await new Promise(r => setTimeout(r, 500));
-    const user: User = { email, name: email.split('@')[0] || 'User' };
-    this.setUser(user);
+  async signIn(email: string, password: string): Promise<User> {
+    const u = await firstValueFrom(
+      this.http.post<User>(`${this.base}/sign-in`, { email, password }, { withCredentials: true })
+    );
+    this.user.set(u);
+    return u!;
   }
 
-  async signUp(name: string, email: string, _password: string) {
-    await new Promise(r => setTimeout(r, 700));
-    this.setUser({ name, email });
+  async signUp(email: string, displayName: string, password: string): Promise<User> {
+    const u = await firstValueFrom(this.http.post<User>(
+      `${this.base}/sign-up`,
+      { email, password, display_name: displayName },
+      { withCredentials: true }
+    ));
+    this.user.set(u);
+    return u!;
   }
 
-  signOut() {
-    this._user.set(null);
-    if (!this.inBrowser) return;
-    try { localStorage.removeItem(KEY); } catch {}
+  async signOut(): Promise<void> {
+    await firstValueFrom(this.http.post(`${this.base}/sign-out`, {}, { withCredentials: true }));
+    this.user.set(null);
   }
 
-  private setUser(u: User) {
-    this._user.set(u);
-    if (!this.inBrowser) return;
-    try { localStorage.setItem(KEY, JSON.stringify(u)); } catch {}
+  isAuthed(): boolean {
+    return !!this.user();
   }
 }

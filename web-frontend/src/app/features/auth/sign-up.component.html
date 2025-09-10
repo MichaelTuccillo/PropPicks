@@ -1,31 +1,46 @@
-<div class="auth">
-  <mat-card>
-    <h2>Create account</h2>
-    <form [formGroup]="form" (ngSubmit)="submit()">
+<div class="auth-shell">
+  <mat-card class="auth-card">
+    <h1>Create account</h1>
+    <p class="sub">Join Mr. Prop Bot to track and generate bets</p>
+
+    <form [formGroup]="form" (ngSubmit)="submit()" class="form">
       <mat-form-field appearance="outline" class="full">
-        <mat-label>Name</mat-label>
-        <input matInput formControlName="name" />
+        <mat-label>Email</mat-label>
+        <input matInput type="email" formControlName="email" autocomplete="email" />
+        <mat-icon matPrefix>mail</mat-icon>
+        <mat-error *ngIf="form.controls.email.hasError('required')">Email is required</mat-error>
+        <mat-error *ngIf="form.controls.email.hasError('email')">Enter a valid email</mat-error>
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full">
-        <mat-label>Email</mat-label>
-        <input matInput type="email" formControlName="email" />
-        <mat-error *ngIf="form.controls.email.invalid && form.controls.email.touched">Enter a valid email</mat-error>
+        <mat-label>Display name</mat-label>
+        <input matInput type="text" formControlName="displayName" autocomplete="nickname" />
+        <mat-icon matPrefix>account_circle</mat-icon>
+        <mat-error *ngIf="form.controls.displayName.hasError('required')">Display name is required</mat-error>
+        <mat-error *ngIf="form.controls.displayName.hasError('minlength')">Min 2 characters</mat-error>
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full">
         <mat-label>Password</mat-label>
-        <input matInput [type]="hide ? 'password' : 'text'" formControlName="password" />
-        <button mat-icon-button matSuffix type="button" (click)="hide = !hide" [attr.aria-label]="'Toggle password'">
-          <mat-icon>{{ hide ? 'visibility' : 'visibility_off' }}</mat-icon>
+        <input matInput [type]="hide() ? 'password' : 'text'" formControlName="password" autocomplete="new-password" />
+        <button mat-icon-button matSuffix type="button" (click)="hide.set(!hide())" [attr.aria-label]="hide() ? 'Show password' : 'Hide password'">
+          <mat-icon>{{ hide() ? 'visibility' : 'visibility_off' }}</mat-icon>
         </button>
+        <mat-icon matPrefix>lock</mat-icon>
+        <mat-error *ngIf="form.controls.password.hasError('required')">Password is required</mat-error>
+        <mat-error *ngIf="form.controls.password.hasError('minlength')">Min 6 characters</mat-error>
       </mat-form-field>
 
-      <button mat-raised-button color="primary" class="full" [disabled]="loading || form.invalid">
-        {{ loading ? 'Creating…' : 'Create account' }}
-      </button>
+      <div class="error" *ngIf="error()">{{ error() }}</div>
 
-      <div class="alt">Already have an account? <a routerLink="/signin">Sign in</a></div>
+      <button mat-raised-button color="primary" class="cta" [disabled]="form.invalid || loading()">
+        {{ loading() ? 'Creating account…' : 'Create account' }}
+      </button>
     </form>
+
+    <div class="switch">
+      Already have an account?
+      <a routerLink="/sign-in">Sign in</a>
+    </div>
   </mat-card>
 </div>

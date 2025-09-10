@@ -1,19 +1,19 @@
 import { Routes } from '@angular/router';
+import { LandingComponent } from './features/landing/landing.component';
+import { DashboardComponent } from './features/dashboard/dashboard.component';
+import { BetGeneratorComponent } from './features/generator/bet-generator.component';
+import { SignInComponent } from './features/auth/sign-in.component';
+import { SignUpComponent } from './features/auth/sign-up.component';
+import { authGuard } from './shared/auth.guard';
 
 export const routes: Routes = [
-  // Landing (not signed in)
-  { path: '', loadComponent: () => import('./features/landing/landing.component').then(m => m.LandingComponent) },
+  { path: '', component: LandingComponent },
+  { path: 'sign-in', component: SignInComponent },
+  { path: 'sign-up', component: SignUpComponent },
 
-  // Demo entry – flips demo on, then redirects to /dashboard
-  { path: 'demo', loadComponent: () => import('./features/demo-redirect.component').then(m => m.DemoRedirectComponent) },
-
-  // App pages (you already have these)
-  { path: 'dashboard', loadComponent: () => import('./features/dashboard/dashboard.component').then(m => m.DashboardComponent) },
-  { path: 'generate',  loadComponent: () => import('./features/generator/bet-generator.component').then(m => m.BetGeneratorComponent) },
-
-  // Auth pages (optional)
-  { path: 'sign-in',  loadComponent: () => import('./features/auth/sign-in.component').then(m => m.SignInComponent) },
-  { path: 'sign-up',  loadComponent: () => import('./features/auth/sign-up.component').then(m => m.SignUpComponent) },
+  // protect app pages by (auth OR demo)
+  { path: 'dashboard', component: DashboardComponent, canActivate: [authGuard] },
+  { path: 'generate',  component: BetGeneratorComponent, canActivate: [authGuard] },
 
   { path: '**', redirectTo: '' }
 ];

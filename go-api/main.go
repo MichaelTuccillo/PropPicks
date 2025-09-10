@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -13,78 +12,65 @@ import (
 	"gorm.io/gorm"
 )
 
-type User struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
-	Email     string    `json:"email" gorm:"uniqueIndex;not null"`
-	CreatedAt time.Time `json:"created_at"`
-}
+var (
+	DB          *gorm.DB
+	jwtSecret   string
+	cookieName  string
+	cookieSecure bool
+)
 
 func main() {
-	// Read DSN from env or fall back to local dev DSN
-	dsn := os.Getenv("DATABASE_DSN")
-	if dsn == "" {
-		dsn = "host=localhost user=postgres password=Sammike31 dbname=PropPicks port=5432 sslmode=disable TimeZone=UTC"
-	}
+	// Load env
+	mustLoadEnv()
 
-	// Connect
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	// Connect DB
+	var err error
+	DB, err = gorm.Open(postgres.Open(os.Getenv("DATABASE_URL")), &gorm.Config{})
 	if err != nil {
-		log.Fatal("failed to connect database: ", err)
+		log.Fatal("db connect:", err)
 	}
 
-	// Auto-migrate the schema (creates 'users' table if missing)
-	if err := db.AutoMigrate(&User{}); err != nil {
-		log.Fatal("auto-migrate failed: ", err)
+	// Auto-migrate
+	if err := DB.AutoMigrate(&User{}); err != nil {
+		log.Fatal("migrate:", err)
 	}
 
-	// Router
+	jwtSecret = os.Getenv("JWT_SECRET")
+	cookieName = os.Getenv("COOKIE_NAME")
+	cookieSecure = os.Getenv("COOKIE_SECURE") == "true"
+
 	r := chi.NewRouter()
+
+	// CORS
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:4200"},
+		AllowedOrigins:   []string{os.Getenv("CORS_ORIGIN")},
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
-		AllowedHeaders:   []string{"*"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: true,
+		MaxAge:           300,
 	}))
 
 	// Health
-	r.Get("/api/hello", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"message":"Hello from Go!"}`))
+	r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
 	})
 
-	// Create user
-	r.Post("/api/users", func(w http.ResponseWriter, req *http.Request) {
-		var body struct {
-			Email string `json:"email"`
-		}
-		if err := json.NewDecoder(req.Body).Decode(&body); err != nil || body.Email == "" {
-			http.Error(w, "email required", http.StatusBadRequest)
-			return
-		}
-		u := User{Email: body.Email}
-		if err := db.Create(&u).Error; err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(u)
+	// Auth routes
+	r.Route("/api/auth", func(r chi.Router) {
+		r.Post("/sign-up", SignUpHandler)
+		r.Post("/sign-in", SignInHandler)
+		r.Post("/sign-out", SignOutHandler)
+		r.Get("/me", MeHandler)
 	})
 
-	// List users
-	r.Get("/api/users", func(w http.ResponseWriter, req *http.Request) {
-		var users []User
-		if err := db.Order("id DESC").Limit(50).Find(&users).Error; err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(users)
-	})
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	addr := ":" + getenvDefault("PORT", "8080")
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
-	log.Printf("server listening on http://localhost:%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, r))
+
+	log.Println("API listening on", addr)
+	log.Fatal(srv.ListenAndServe())
 }
