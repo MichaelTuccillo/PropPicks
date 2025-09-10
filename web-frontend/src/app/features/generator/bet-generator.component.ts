@@ -14,6 +14,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MockDataService } from '../../shared/mock-data.service';
 import { GeneratorService, GeneratorInput, Slip } from '../../shared/generator.service';
 import { Sport } from '../../shared/types';
+import { AiSlipService, AiBetSlip, AiFilters  } from '../../shared/ai-slip.service';
 
 type BetMode = 'Single' | 'SGP' | 'SGP+';
 
@@ -32,6 +33,13 @@ export class BetGeneratorComponent {
   // Services
   public data = inject(MockDataService);           // public so template can read .sports
   private gen  = inject(GeneratorService);
+  private ai = inject(AiSlipService);
+
+
+  aiLoading = signal(false);
+  aiError   = signal<string | null>(null);
+  aiSlip    = signal<AiBetSlip | null>(null);
+
 
   // Expose sports to template
   sports = this.data.sports;
@@ -48,7 +56,7 @@ export class BetGeneratorComponent {
 
   // Models as a checklist
   models = computed(() => this.data.models);
-  selectedIds = signal<Set<string>>(new Set(this.models().filter(m => m.selected).map(m => m.id)));
+  selectedIds = signal(new Set<string>());
 
   // Output slips
   private out = signal<Slip[] | null>(null);
@@ -173,4 +181,66 @@ export class BetGeneratorComponent {
     const a = l as any;
     return (a?.selection ?? a?.pick ?? a?.side ?? '') + '';
   }
+
+  private collectFiltersForAI() {
+    return {
+        sport:  this.sport(),
+        mode:   this.mode(),
+        legs:   this.mode() === 'Single' ? 1 : this.legs(),
+        slips:  this.slips(),
+        minOdds: this.minOdds(),
+        maxOdds: this.maxOdds(),
+        // IMPORTANT: the mock generator expects 'models' as an array of IDs
+        models: Array.from(this.selectedIds()),
+    };
+  }
+
+  // If you have selectedIds(): Set<string>, derive a single model from it.
+  // Fallback default = 'Narrative'
+  selectedModel = computed<string>(() => {
+    const anyThis = this as any;
+    if (typeof anyThis.selectedIds === 'function') {
+        const set: Set<string> = anyThis.selectedIds();
+        if (set && set.size) return Array.from(set)[0];
+    }
+    return 'Narrative';
+  });
+
+  setExclusiveModel(name: string, checked: boolean) {
+    if (!checked) return; // keep one selected
+    const anyThis = this as any;
+    if (typeof anyThis.selectedIds === 'function' && typeof anyThis.selectedIds.set === 'function') {
+        anyThis.selectedIds.set(new Set([name]));
+    }
+  }
+
+  generateAiSlip() {
+    this.aiError.set(null);
+    this.aiSlip.set(null);
+    this.aiLoading.set(true);
+
+    const anyThis = this as any;
+    const filters: AiFilters = {
+        sport:  anyThis.sport?.() ?? '',
+        mode:   anyThis.mode?.() ?? 'SGP',
+        legs:   anyThis.mode?.() === 'Single' ? 1 : Math.max(1, Number(anyThis.legs?.() ?? 1)),
+        slips:  Math.max(1, Number(anyThis.slips?.() ?? 1)),
+        minOdds: Number(anyThis.minOdds?.() ?? 0),
+        maxOdds: Number(anyThis.maxOdds?.() ?? 0),
+        model:  this.selectedModel(),
+    };
+
+    this.ai.generateSlip(filters).subscribe({
+        next: (s) => { this.aiSlip.set(s); this.aiLoading.set(false); },
+        error: (err) => {
+        const raw = err?.error;
+        const msg = (typeof raw === 'string' && raw) || raw?.message || err?.message || 'Failed to generate slip';
+        this.aiError.set(msg);
+        this.aiLoading.set(false);
+        }
+    });
+  }
+
+  discardAiSlip() { this.aiSlip.set(null); }
+  saveAiSlip() { /* hook up later */ }
 }

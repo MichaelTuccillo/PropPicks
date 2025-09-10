@@ -1,0 +1,40 @@
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../../environments/environment.development';
+
+export interface AiFilters {
+  sport: string;
+  mode: 'Single' | 'SGP' | 'SGP+';
+  legs: number;
+  slips: number;
+  minOdds: number;
+  maxOdds: number;
+  model: string; // exactly one selected
+}
+
+export interface AiSlipLeg {
+  market: string;
+  pick: string;
+  line?: string;
+  odds?: string;
+  notes?: string;
+}
+
+export interface AiBetSlip {
+  title: string;
+  event: string;
+  legs: AiSlipLeg[];
+  combinedOdds?: string;
+  rationale?: string;
+  createdAt?: string;
+}
+
+@Injectable({ providedIn: 'root' })
+export class AiSlipService {
+  private base = (environment as any)?.apiBase || '/api';
+  constructor(private http: HttpClient) {}
+
+  generateSlip(filters: AiFilters) {
+    return this.http.post<AiBetSlip>(`${this.base}/generate-slip`, { filters });
+  }
+}

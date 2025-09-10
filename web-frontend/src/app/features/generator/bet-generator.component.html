@@ -50,80 +50,88 @@
 
     <!-- Odds -->
     <div class="row">
-        <mat-form-field appearance="outline" class="half">
-            <mat-label>Min odds (American)</mat-label>
-            <input
-            matInput
-            type="number"
-            [attr.step]="5"
-            [value]="minOdds()"
-            (input)="onOddsInput('min', $event)"
-            />
-            <mat-error *ngIf="oddsInvalid('min')">
-            Odds cannot be between −100 and +100.
-            </mat-error>
-        </mat-form-field>
+      <mat-form-field appearance="outline" class="half">
+        <mat-label>Min odds (American)</mat-label>
+        <input
+          matInput
+          type="number"
+          [attr.step]="5"
+          [value]="minOdds()
+          "
+          (input)="onOddsInput('min', $event)"
+        />
+        <mat-error *ngIf="oddsInvalid('min')">
+          Odds cannot be between −100 and +100.
+        </mat-error>
+      </mat-form-field>
 
-        <mat-form-field appearance="outline" class="half">
-            <mat-label>Max odds (American)</mat-label>
-            <input
-            matInput
-            type="number"
-            [attr.step]="5"
-            [value]="maxOdds()"
-            (input)="onOddsInput('max', $event)"
-            />
-            <mat-error *ngIf="oddsInvalid('max')">
-            Odds cannot be between −100 and +100.
-            </mat-error>
-        </mat-form-field>
+      <mat-form-field appearance="outline" class="half">
+        <mat-label>Max odds (American)</mat-label>
+        <input
+          matInput
+          type="number"
+          [attr.step]="5"
+          [value]="maxOdds()"
+          (input)="onOddsInput('max', $event)"
+        />
+        <mat-error *ngIf="oddsInvalid('max')">
+          Odds cannot be between −100 and +100.
+        </mat-error>
+      </mat-form-field>
     </div>
 
     <!-- Models -->
     <div class="row models-head">
       <h3 class="sub">Models</h3>
       <div class="actions">
-        <a (click)="selectAllModels()">Select all</a>
+        <span class="muted">(choose one)</span>
+        <!-- Removed "Select all" to enforce single-select -->
         <a (click)="clearModels()">Clear</a>
       </div>
     </div>
 
+    <!-- Single-select behavior:
+         Clicking any model will first clear all, then select that model.
+         (No TS changes required; uses your existing clearModels() + toggleModel(..., true))
+    -->
     <div class="row checks">
       <label class="check" *ngFor="let m of models(); trackBy: trackModel">
         <mat-checkbox
           [checked]="selectedIds().has(m.id)"
-          (change)="toggleModel(m.id, $event.checked)">
+          (change)="clearModels(); toggleModel(m.id, true)">
         </mat-checkbox>
         <span>{{ m.name }}</span>
       </label>
     </div>
 
     <div class="cta-row">
-        <div class="hint muted" *ngIf="!canGenerate()">
-            Select at least one model and enter valid odds (no values between −100 and +100).
-        </div>
+      <div class="hint muted" *ngIf="!canGenerate()">
+        Select exactly one model and enter valid odds (no values between −100 and +100).
+      </div>
 
-        <button
-            mat-stroked-button
-            class="clear-btn small"
-            (click)="clearResults()"
-            *ngIf="slipsOut()"
-        >
-            <mat-icon>clear</mat-icon>
-            Clear
-        </button>
+      <button
+        mat-stroked-button
+        class="clear-btn small"
+        (click)="clearResults()"
+        *ngIf="slipsOut()"
+      >
+        <mat-icon>clear</mat-icon>
+        Clear
+      </button>
 
-        <button
-            mat-raised-button
-            color="primary"
-            class="generate-btn small"
-            [disabled]="!canGenerate()"
-            (click)="generate()"
-        >
-            <mat-icon>auto_awesome</mat-icon>
-            Generate bets
-        </button>
-        </div>
+      <button
+        mat-raised-button
+        color="primary"
+        class="generate-btn small"
+        [disabled]="aiLoading() || !canGenerate()"
+        (click)="generateAiSlip()"
+      >
+        <mat-icon>auto_awesome</mat-icon>
+        Generate bets
+      </button>
+      <span *ngIf="aiLoading()" class="hint">Generating…</span>
+      <span *ngIf="aiError()" class="hint" style="color:#f88;">{{ aiError() }}</span>
+    </div>
   </mat-card>
 
   <!-- Results appear below -->
@@ -144,4 +152,37 @@
       </div>
     </div>
   </mat-card>
+
+  <mat-card class="panel" *ngIf="aiSlip() as s">
+    <div class="results">
+      <h3 class="sub">AI Bet Slip</h3>
+      <div class="slip">
+        <div class="head">
+          {{ s.title || 'Proposed Bet Slip' }}
+          <span *ngIf="s.combinedOdds"> — {{ s.combinedOdds }}</span>
+        </div>
+        <div class="muted" *ngIf="s.event">{{ s.event }}</div>
+        <ul class="legs">
+          <li *ngFor="let l of s.legs">
+            <strong>{{ l.market }}:</strong> {{ l.pick }}
+            <span *ngIf="l.line || l.odds">
+              ( <ng-container *ngIf="l.line">Line: {{ l.line }}</ng-container>
+                <ng-container *ngIf="l.line && l.odds"> • </ng-container>
+                <ng-container *ngIf="l.odds">Odds: {{ l.odds }}</ng-container> )
+            </span>
+            <div class="muted" *ngIf="l.notes">{{ l.notes }}</div>
+          </li>
+        </ul>
+        <div class="why" *ngIf="s.rationale">
+          <div class="muted">Why:</div>
+          <div>{{ s.rationale }}</div>
+        </div>
+      </div>
+      <div class="right-actions" style="margin-top:8px;">
+        <button mat-stroked-button color="warn" (click)="discardAiSlip()">Discard</button>
+        <button mat-raised-button color="primary" (click)="saveAiSlip()">Save</button>
+      </div>
+    </div>
+  </mat-card>
+
 </div>

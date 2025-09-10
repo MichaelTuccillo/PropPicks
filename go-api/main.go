@@ -71,6 +71,8 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
+	r.Post("/api/generate-slip", handleGenerateSlip)
+
 	log.Println("API listening on", addr)
 	log.Fatal(srv.ListenAndServe())
 }
