@@ -143,3 +143,52 @@ table.mat-mdc-table .mat-mdc-footer-cell {
 .app-toolbar a.active {
   text-decoration: underline; /* optional active style */
 }
+
+/* Solid background for account dropdown */
+.solid-menu,
+.solid-menu .mat-mdc-menu-content,
+.solid-menu .mdc-menu-surface {
+  background-color: #fff !important;     /* light theme */
+  backdrop-filter: none !important;       /* kill translucency/blur if any */
+}
+
+/* Optional: if you have a dark theme class, keep the menu solid there too */
+.dark-theme .solid-menu,
+.dark-theme .solid-menu .mat-mdc-menu-content,
+.dark-theme .solid-menu .mdc-menu-surface {
+  background-color: #1f1f1f !important;   /* dark solid */
+}
+
+/* --- Solid account dropdown (overrides any glass/transparency) --- */
+
+/* Dark theme default (adjust the color to your palette) */
+.cdk-overlay-container .cdk-overlay-pane .solid-menu.mdc-menu-surface,
+.cdk-overlay-container .cdk-overlay-pane .mat-mdc-menu-panel.solid-menu.mdc-menu-surface {
+  /* Material tokens (new Angular Material) */
+  --mat-menu-container-color: #0f1828;
+  --mdc-theme-surface: #0f1828;
+
+  /* Kill glass / alpha */
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+
+  /* Force solid background regardless of rgba() rules elsewhere */
+  background: #0f1828 !important;
+  background-color: #0f1828 !important;
+  opacity: 1 !important;
+}
+
+/* Ensure the inner content doesn’t reapply translucent background */
+.cdk-overlay-container .cdk-overlay-pane .solid-menu .mat-mdc-menu-content {
+  background: transparent !important; /* inherit solid from parent surface */
+}
+
+/* Light theme variant (if your app toggles .light-theme or not .dark-theme) */
+.light-theme .cdk-overlay-container .cdk-overlay-pane .solid-menu.mdc-menu-surface,
+body:not(.dark-theme) .cdk-overlay-container .cdk-overlay-pane .solid-menu.mdc-menu-surface {
+  --mat-menu-container-color: #ffffff;
+  --mdc-theme-surface: #ffffff;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+}
+

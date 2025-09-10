@@ -1,48 +1,44 @@
 <mat-toolbar class="app-toolbar" color="transparent">
-  <!-- Brand (left) -->
+  <!-- Brand -->
   <a class="brand" (click)="goHome()" role="button">Mr. Prop Bot</a>
 
-  <!-- Push everything else to the right -->
   <span class="spacer"></span>
 
-  <!-- APP NAV when: demo mode OR a real signed-in user -->
+  <!-- When signed in OR in demo -->
   <ng-container *ngIf="demo() || auth.isAuthed(); else guest">
     <a mat-button routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
     <a mat-button routerLink="/generate"  routerLinkActive="active">Generate</a>
 
-    <!-- Account menu -->
-    <button mat-icon-button [matMenuTriggerFor]="menu" aria-label="Account">
+    <!-- Account icon opens menu -->
+    <button
+      mat-icon-button
+      [matMenuTriggerFor]="accountMenu"
+      aria-label="Account menu">
       <mat-icon>account_circle</mat-icon>
     </button>
-    <mat-menu #menu="matMenu" panelClass="account-menu-panel" xPosition="after" yPosition="below">
-      <!-- Show user email if available -->
-      <div class="mat-menu-item" *ngIf="auth.user() as u" style="opacity:.8; pointer-events:none;">
-        <mat-icon style="margin-right:12px;">person</mat-icon>
-        <span>{{ u.email }}</span>
-      </div>
-      <div *ngIf="auth.user()" style="height:1px;background:var(--border);margin:4px 0;"></div>
 
-
-      <!-- Sign out for real accounts -->
-      <button mat-menu-item *ngIf="auth.isAuthed()" (click)="auth.signOut()">
+    <!-- SOLID menu panel -->
+    <mat-menu #accountMenu="matMenu" panelClass="solid-menu">
+      <!-- Signed-in user -->
+      <button mat-menu-item *ngIf="auth.isAuthed()" (click)="onSignOut()">
         <mat-icon>logout</mat-icon>
         <span>Sign out</span>
       </button>
 
-      <!-- Exit demo for demo mode -->
-      <button mat-menu-item *ngIf="demo()" (click)="signOutDemo()">
+      <!-- Demo user -->
+      <button mat-menu-item *ngIf="!auth.isAuthed()" (click)="signOutDemo()">
         <mat-icon>logout</mat-icon>
         <span>Exit demo</span>
       </button>
     </mat-menu>
 
-    <!-- Theme -->
+    <!-- Theme toggle (optional) -->
     <button mat-icon-button *ngIf="theme" (click)="theme.toggle()" aria-label="Toggle theme">
       <mat-icon>{{ theme.isDark() ? 'light_mode' : 'dark_mode' }}</mat-icon>
     </button>
   </ng-container>
 
-  <!-- GUEST: landing etc. (no demo link here) -->
+  <!-- Guest -->
   <ng-template #guest>
     <a mat-button routerLink="/sign-in" routerLinkActive="active">Sign in</a>
     <a mat-stroked-button routerLink="/sign-up" routerLinkActive="active">Create account</a>

@@ -53,4 +53,17 @@ export class AppComponent {
   goHome() {
     this.router.navigateByUrl('/');
   }
+
+  async onSignOut() {
+    try {
+      await this.auth.signOut();
+    } finally {
+      if (typeof this.goHome === 'function') {
+        this.goHome();
+      } else if ((this as any).router?.navigateByUrl) {
+        (this as any).router.navigateByUrl('/');
+      }
+    }
+  }
+
 }
