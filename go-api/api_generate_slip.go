@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
+	"time"
 )
 
 /* ---------------- Request / Filters ---------------- */
@@ -18,17 +22,64 @@ type GenerateFilters struct {
 	Sport     string  `json:"sport"`     // e.g., "NFL", "MLB"
 	Mode      string  `json:"mode"`      // "Single" | "SGP" | "SGP+"
 	Legs      int     `json:"legs"`      // desired legs (ignored when Single)
-	Slips     int     `json:"slips"`     // requested count; we still produce one best slip in test
+	Slips     int     `json:"slips"`     // requested count; we still produce one best slip
 	MinOdds   float64 `json:"minOdds"`   // if >= +100, treat as overall payout lower bound
 	MaxOdds   float64 `json:"maxOdds"`   // if >= +100, treat as overall payout upper bound
 	Model     string  `json:"model"`     // exactly one selected model
-	BoostPct  float64 `json:"boostPct"`  // NEW: e.g., 0, 30, 50 (percentage)
+	BoostPct  float64 `json:"boostPct"`  // e.g., 0, 30, 50 (percentage)
 }
 
-/* ---------------- Handler (TEST MODE) ---------------- */
+/* ---------------- Model Output ---------------- */
 
-// TEST MODE: does not call OpenAI. Builds the prompt, prints it to terminal,
-// and returns it as JSON so you can also see it in the browser/Network tab.
+type slipLeg struct {
+	Market string `json:"market"`
+	Pick   string `json:"pick"`
+	Line   string `json:"line,omitempty"`
+	Odds   string `json:"odds,omitempty"`
+	Notes  string `json:"notes,omitempty"`
+}
+
+type betSlip struct {
+	Title           string    `json:"title"`
+	Event           string    `json:"event"`
+	Legs            []slipLeg `json:"legs"`
+	CombinedOdds    string    `json:"combinedOdds,omitempty"`
+	EstimatedPayout *struct {
+		PreBoostMultiple  float64 `json:"preBoostMultiple"`
+		PreBoostAmerican  string  `json:"preBoostAmerican"`
+		PostBoostMultiple float64 `json:"postBoostMultiple"`
+		PostBoostAmerican string  `json:"postBoostAmerican"`
+		Assumptions       string  `json:"assumptions"`
+	} `json:"estimatedPayout,omitempty"`
+	Rationale string    `json:"rationale,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+/* ---------------- OpenAI payloads ---------------- */
+
+type openAIMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type openAIChatReq struct {
+	Model       string          `json:"model"`
+	Messages    []openAIMessage `json:"messages"`
+	Temperature float32         `json:"temperature,omitempty"`
+}
+
+type openAIChatResp struct {
+	Choices []struct {
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+	} `json:"choices"`
+}
+
+/* ---------------- Handler (LIVE MODE) ---------------- */
+
+// POST /api/generate-slip
+// Calls OpenAI, still logs the prompt for debugging, returns parsed JSON slip.
 func handleGenerateSlip(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -44,18 +95,92 @@ func handleGenerateSlip(w http.ResponseWriter, r *http.Request) {
 	// Build prompt
 	prompt := buildPromptFromFilters(req.Filters)
 
-	// ---------- PRINT TO TERMINAL ----------
-	log.Println("----- /api/generate-slip TEST PROMPT -----")
+	// ----- PRINT TO TERMINAL (debug) -----
+	log.Println("----- /api/generate-slip LIVE PROMPT -----")
 	log.Printf("Filters: %+v\n", req.Filters)
 	log.Println("----- BEGIN PROMPT -----")
 	log.Println(prompt)
 	log.Println("------ END PROMPT ------")
-	// --------------------------------------
+	// -------------------------------------
 
-	// Also return it so you can read it in your browser / Network tab.
-	writeJSON(w, http.StatusOK, map[string]any{
-		"prompt": prompt,
-	})
+	// Env/config
+	key := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+	if key == "" {
+		errorJSON(w, http.StatusInternalServerError, "server missing OPENAI_API_KEY")
+		return
+	}
+	apiModel := strings.TrimSpace(os.Getenv("OPENAI_MODEL"))
+	if apiModel == "" {
+		apiModel = "gpt-4o-mini" // default; change via env if you prefer
+	}
+	base := strings.TrimSpace(os.Getenv("OPENAI_BASE_URL"))
+	if base == "" {
+		base = "https://api.openai.com"
+	}
+	org := strings.TrimSpace(os.Getenv("OPENAI_ORG")) // optional
+
+	// Build request
+	body := openAIChatReq{
+		Model: apiModel,
+		Messages: []openAIMessage{
+			{Role: "system", Content: "You must output valid JSON only. Never include markdown code fences."},
+			{Role: "user", Content: prompt},
+		},
+		Temperature: 0.3,
+	}
+	payload, _ := json.Marshal(body)
+
+	httpReq, _ := http.NewRequest("POST", base+"/v1/chat/completions", bytes.NewReader(payload))
+	httpReq.Header.Set("Authorization", "Bearer "+key)
+	httpReq.Header.Set("Content-Type", "application/json")
+	if org != "" {
+		httpReq.Header.Set("OpenAI-Organization", org)
+	}
+
+	client := &http.Client{Timeout: 45 * time.Second}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		log.Printf("[generate-slip] upstream error: %v", err)
+		errorJSON(w, http.StatusBadGateway, "upstream error contacting OpenAI")
+		return
+	}
+	defer resp.Body.Close()
+
+	slurp, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		log.Printf("[generate-slip] openai non-2xx: status=%d body=%s", resp.StatusCode, string(slurp))
+		errorJSON(w, http.StatusBadGateway, strings.TrimSpace(string(slurp)))
+		return
+	}
+
+	var ai openAIChatResp
+	if err := json.Unmarshal(slurp, &ai); err != nil {
+		log.Printf("[generate-slip] decode error: %v; raw=%s", err, string(slurp))
+		errorJSON(w, http.StatusBadGateway, "bad openai response")
+		return
+	}
+	if len(ai.Choices) == 0 {
+		errorJSON(w, http.StatusBadGateway, "no choices from openai")
+		return
+	}
+
+	content := strings.TrimSpace(ai.Choices[0].Message.Content)
+
+	// Parse model JSON -> betSlip
+	var slip betSlip
+	if err := json.Unmarshal([]byte(content), &slip); err != nil {
+		// Fallback: still return something so UI can render
+		slip = betSlip{
+			Title:     "Generated Slip",
+			Event:     "",
+			Legs:      []slipLeg{{Market: "Raw", Pick: content}},
+			CreatedAt: time.Now().UTC(),
+		}
+	} else {
+		slip.CreatedAt = time.Now().UTC()
+	}
+
+	writeJSON(w, http.StatusOK, slip)
 }
 
 /* ---------------- Prompt Builder (model-aware) ---------------- */
@@ -79,7 +204,7 @@ func buildPromptFromFilters(f GenerateFilters) string {
 	}
 	sport := strings.TrimSpace(f.Sport)
 
-	// Determine if min/max look like overall payout bounds (positive American)
+	// If min/max look like overall payout bounds (positive American)
 	minPayoutBound := ""
 	maxPayoutBound := ""
 	if f.MinOdds >= 100 {
@@ -91,7 +216,7 @@ func buildPromptFromFilters(f GenerateFilters) string {
 
 	var sb strings.Builder
 
-	// JSON schema your UI will expect once you flip back to real generations
+	// JSON schema your UI expects
 	sb.WriteString("Return ONLY JSON with this schema:\n")
 	sb.WriteString(`{
   "title": "string",
@@ -110,7 +235,7 @@ func buildPromptFromFilters(f GenerateFilters) string {
   "rationale": "string(optional)"
 }` + "\n\n")
 
-	// Context = ONLY the fields your page supplies
+	// Context (only fields your page supplies)
 	if sport != "" {
 		sb.WriteString("- Sport: " + sport + "\n")
 	}
@@ -120,7 +245,7 @@ func buildPromptFromFilters(f GenerateFilters) string {
 		sb.WriteString(fmt.Sprintf("- User requested %d slip(s); return ONE best slip.\n", f.Slips))
 	}
 
-	// If caller wants overall payout bounds (positive American), hint the target range
+	// Target payout bounds (if provided as positive American)
 	if minPayoutBound != "" || maxPayoutBound != "" {
 		sb.WriteString("- Target final payout (American) after applying SGP tax and then boost: ")
 		if minPayoutBound != "" && maxPayoutBound != "" {
@@ -140,7 +265,7 @@ func buildPromptFromFilters(f GenerateFilters) string {
 	}
 	sb.WriteString("\n")
 
-	// Attach the model-specific instructions (sport-aware + payout-aware + SGP/SGP+ rules)
+	// Model-specific instructions (sport-aware + payout-aware + SGP/SGP+ rules)
 	sb.WriteString(promptForModel(model, legsWanted, sport, f.MinOdds, f.MaxOdds, f.BoostPct, f.Mode))
 	return sb.String()
 }
@@ -245,7 +370,6 @@ func sgpRules(mode string) string {
 }
 
 // Shared payout guidance appended to every model wrapper.
-// Describes: SGP "tax", optional boostPct, decimal conversion, and keeping within bounds when provided.
 func payoutGuidance(minOdds, maxOdds, boostPct float64, legs int, sport string) string {
 	var b strings.Builder
 	b.WriteString("\nPayout estimation instructions:\n")
