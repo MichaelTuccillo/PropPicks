@@ -109,7 +109,7 @@ func handleGenerateSlip(w http.ResponseWriter, r *http.Request) {
 	}
 	apiModel := strings.TrimSpace(os.Getenv("OPENAI_MODEL"))
 	if apiModel == "" {
-		apiModel = "gpt-4o-mini"
+		apiModel = "gpt-5-mini"
 	}
 	base := strings.TrimSpace(os.Getenv("OPENAI_BASE_URL"))
 	if base == "" {
@@ -124,7 +124,7 @@ func handleGenerateSlip(w http.ResponseWriter, r *http.Request) {
 			{Role: "system", Content: "You must output valid JSON only. Never include markdown code fences."},
 			{Role: "user", Content: prompt},
 		},
-		Temperature: 0.3,
+		Temperature: 1,     // gpt-5-mini only supports the default (1)
 	}
 	payload, _ := json.Marshal(body)
 
