@@ -1,15 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"os"
 	"strings"
-	"time"
 )
 
 /* ---------------- Request / Filters ---------------- */
@@ -19,57 +15,20 @@ type generateSlipRequest struct {
 }
 
 type GenerateFilters struct {
-	Sport   string  `json:"sport"`            // e.g., "MLB"
-	Mode    string  `json:"mode"`             // "Single" | "SGP" | "SGP+"
-	Legs    int     `json:"legs"`             // desired legs (ignored when Single)
-	Slips   int     `json:"slips"`            // user asked for N; server still returns ONE best slip
-	MinOdds float64 `json:"minOdds"`          // e.g., -120
-	MaxOdds float64 `json:"maxOdds"`          // e.g., +200
-	Model   string  `json:"model"`            // exactly one selected model
+	Sport     string  `json:"sport"`     // e.g., "NFL", "MLB"
+	Mode      string  `json:"mode"`      // "Single" | "SGP" | "SGP+"
+	Legs      int     `json:"legs"`      // desired legs (ignored when Single)
+	Slips     int     `json:"slips"`     // user asked for N; real mode can still return one best slip
+	MinOdds   float64 `json:"minOdds"`   // can be used as overall payout lower bound (if >= +100)
+	MaxOdds   float64 `json:"maxOdds"`   // can be used as overall payout upper bound (if >= +100)
+	Model     string  `json:"model"`     // exactly one selected model
+	BoostPct  float64 `json:"boostPct"`  // NEW: e.g., 0, 30, 50  (percentage)
 }
 
-/* ---------------- Model Output ---------------- */
+/* ---------------- Handler (TEST MODE) ---------------- */
 
-type slipLeg struct {
-	Market string `json:"market"`
-	Pick   string `json:"pick"`
-	Line   string `json:"line,omitempty"`
-	Odds   string `json:"odds,omitempty"`
-	Notes  string `json:"notes,omitempty"`
-}
-
-type betSlip struct {
-	Title        string    `json:"title"`
-	Event        string    `json:"event"`
-	Legs         []slipLeg `json:"legs"`
-	CombinedOdds string    `json:"combinedOdds,omitempty"`
-	Rationale    string    `json:"rationale,omitempty"`
-	CreatedAt    time.Time `json:"createdAt"`
-}
-
-/* ---------------- OpenAI payloads ---------------- */
-
-type openAIMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type openAIChatReq struct {
-	Model       string          `json:"model"`
-	Messages    []openAIMessage `json:"messages"`
-	Temperature float32         `json:"temperature,omitempty"`
-}
-
-type openAIChatResp struct {
-	Choices []struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
-	} `json:"choices"`
-}
-
-/* ---------------- Handler ---------------- */
-
+// TEST MODE: does not call OpenAI. Builds the prompt, prints it to terminal,
+// and returns it as JSON so you can also see it in the Network tab.
 func handleGenerateSlip(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -82,82 +41,21 @@ func handleGenerateSlip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
-	if key == "" {
-		errorJSON(w, http.StatusInternalServerError, "server missing OPENAI_API_KEY")
-		return
-	}
-	apiModel := strings.TrimSpace(os.Getenv("OPENAI_MODEL"))
-	if apiModel == "" {
-		apiModel = "gpt-4o-mini"
-	}
-	base := strings.TrimSpace(os.Getenv("OPENAI_BASE_URL"))
-	if base == "" {
-		base = "https://api.openai.com"
-	}
-	org := strings.TrimSpace(os.Getenv("OPENAI_ORG")) // optional
+	// Build prompt
+	prompt := buildPromptFromFilters(req.Filters)
 
-	userPrompt := buildPromptFromFilters(req.Filters)
+	// ---------- PRINT TO TERMINAL ----------
+	log.Println("----- /api/generate-slip TEST PROMPT -----")
+	log.Printf("Filters: %+v\n", req.Filters)
+	log.Println("----- BEGIN PROMPT -----")
+	log.Println(prompt)
+	log.Println("------ END PROMPT ------")
+	// --------------------------------------
 
-	body := openAIChatReq{
-		Model: apiModel,
-		Messages: []openAIMessage{
-			{Role: "system", Content: "You must output valid JSON only. Never include markdown code fences."},
-			{Role: "user", Content: userPrompt},
-		},
-		Temperature: 0.3,
-	}
-
-	payload, _ := json.Marshal(body)
-	httpReq, _ := http.NewRequest("POST", base+"/v1/chat/completions", bytes.NewReader(payload))
-	httpReq.Header.Set("Authorization", "Bearer "+key)
-	httpReq.Header.Set("Content-Type", "application/json")
-	if org != "" {
-		httpReq.Header.Set("OpenAI-Organization", org)
-	}
-
-	client := &http.Client{Timeout: 45 * time.Second}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		log.Printf("[generate-slip] upstream error: %v", err)
-		errorJSON(w, http.StatusBadGateway, "upstream error contacting OpenAI")
-		return
-	}
-	defer resp.Body.Close()
-
-	slurp, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode/100 != 2 {
-		log.Printf("[generate-slip] openai non-2xx: status=%d body=%s", resp.StatusCode, string(slurp))
-		errorJSON(w, http.StatusBadGateway, strings.TrimSpace(string(slurp)))
-		return
-	}
-
-	var ai openAIChatResp
-	if err := json.Unmarshal(slurp, &ai); err != nil {
-		log.Printf("[generate-slip] decode error: %v; raw=%s", err, string(slurp))
-		errorJSON(w, http.StatusBadGateway, "bad openai response")
-		return
-	}
-	if len(ai.Choices) == 0 {
-		errorJSON(w, http.StatusBadGateway, "no choices from openai")
-		return
-	}
-	content := strings.TrimSpace(ai.Choices[0].Message.Content)
-
-	var slip betSlip
-	if err := json.Unmarshal([]byte(content), &slip); err != nil {
-		// Fallback so UI still renders something
-		slip = betSlip{
-			Title:     "Generated Slip",
-			Event:     "",
-			Legs:      []slipLeg{{Market: "Raw", Pick: content}},
-			CreatedAt: time.Now().UTC(),
-		}
-	} else {
-		slip.CreatedAt = time.Now().UTC()
-	}
-
-	writeJSON(w, http.StatusOK, slip) // uses your existing helper signature
+	// Also return it so you can read it in your browser / Network tab.
+	writeJSON(w, http.StatusOK, map[string]any{
+		"prompt": prompt,
+	})
 }
 
 /* ---------------- Prompt Builder (model-aware) ---------------- */
@@ -174,15 +72,27 @@ func buildPromptFromFilters(f GenerateFilters) string {
 		}
 	}
 
-	// Model
+	// Single model & sport
 	model := strings.TrimSpace(f.Model)
 	if model == "" {
 		model = "Narrative"
 	}
+	sport := strings.TrimSpace(f.Sport)
+
+	// Determine if min/max look like overall payout bounds (positive American)
+	minPayoutBound := ""
+	maxPayoutBound := ""
+	if f.MinOdds >= 100 {
+		minPayoutBound = fmt.Sprintf("+%.0f", f.MinOdds)
+	}
+	if f.MaxOdds >= 100 {
+		maxPayoutBound = fmt.Sprintf("+%.0f", f.MaxOdds)
+	}
 
 	var sb strings.Builder
 
-	// JSON schema (the format your Angular UI expects)
+	// JSON schema your UI will expect once you flip back to real generations
+	// (Keeping it here so you can see exactly what we request from the model.)
 	sb.WriteString("Return ONLY JSON with this schema:\n")
 	sb.WriteString(`{
   "title": "string",
@@ -191,85 +101,156 @@ func buildPromptFromFilters(f GenerateFilters) string {
     {"market":"string","pick":"string","line":"string(optional)","odds":"string(optional)","notes":"string(optional)"}
   ],
   "combinedOdds": "string(optional)",
+  "estimatedPayout": {
+    "preBoostMultiple": number,
+    "preBoostAmerican": "string",   // e.g., "+650"
+    "postBoostMultiple": number,    // equal to preBoostMultiple if boostPct=0
+    "postBoostAmerican": "string",  // e.g., "+845"
+    "assumptions": "string"         // quick note: leg prices used, tax factor, boost applied
+  },
   "rationale": "string(optional)"
 }` + "\n\n")
 
 	// Context = ONLY the fields your page supplies
-	if s := strings.TrimSpace(f.Sport); s != "" {
-		sb.WriteString("- Sport: " + s + "\n")
+	if sport != "" {
+		sb.WriteString("- Sport: " + sport + "\n")
 	}
 	sb.WriteString("- Mode: " + orDefault(f.Mode, "SGP") + "\n")
 	sb.WriteString(fmt.Sprintf("- Desired legs: %d\n", legsWanted))
-	if f.MinOdds != 0 || f.MaxOdds != 0 {
-		sb.WriteString("- Odds range preference: ")
-		if f.MinOdds != 0 {
-			sb.WriteString(fmt.Sprintf("min %.0f ", f.MinOdds))
-		}
-		if f.MaxOdds != 0 {
-			sb.WriteString(fmt.Sprintf("max %.0f ", f.MaxOdds))
-		}
-		sb.WriteString("\n")
-	}
 	if f.Slips > 0 {
 		sb.WriteString(fmt.Sprintf("- User requested %d slip(s); return ONE best slip.\n", f.Slips))
 	}
+
+	// If caller wants overall payout bounds (positive American), hint the target range
+	if minPayoutBound != "" || maxPayoutBound != "" {
+		sb.WriteString("- Target final payout (American) after applying SGP tax and then boost: ")
+		if minPayoutBound != "" && maxPayoutBound != "" {
+			sb.WriteString(fmt.Sprintf("%s to %s (okay to exceed modestly if leg count forces it)\n", minPayoutBound, maxPayoutBound))
+		} else if minPayoutBound != "" {
+			sb.WriteString(fmt.Sprintf(">= %s (okay to exceed modestly)\n", minPayoutBound))
+		} else {
+			sb.WriteString(fmt.Sprintf("<= %s (okay to exceed modestly)\n", maxPayoutBound))
+		}
+	}
+
+	// Boost guidance
+	if f.BoostPct > 0 {
+		sb.WriteString(fmt.Sprintf("- Sportsbook boost to apply AFTER SGP tax: %.0f%%\n", f.BoostPct))
+	} else {
+		sb.WriteString("- No sportsbook boost (boostPct = 0)\n")
+	}
 	sb.WriteString("\n")
 
-	// Model-specific prompting
-	sb.WriteString(promptForModel(model, legsWanted))
+	// Attach the model-specific instructions (now sport-aware + payout-aware)
+	sb.WriteString(promptForModel(model, legsWanted, sport, f.MinOdds, f.MaxOdds, f.BoostPct))
 	return sb.String()
 }
 
-func promptForModel(model string, legsWanted int) string {
-	switch strings.ToLower(strings.TrimSpace(model)) {
+func promptForModel(model string, legsWanted int, sport string, minOdds, maxOdds, boostPct float64) string {
+	modelKey := strings.ToLower(strings.TrimSpace(model))
+	payoutBlock := payoutGuidance(minOdds, maxOdds, boostPct, legsWanted, sport)
+
+	switch modelKey {
 	case "narrative", "correlated", "narrative / correlated story":
-		return fmt.Sprintf(`You are the "Narrative / Correlated Story" model.
-Build a coherent game-script slip with %d leg(s) around −105 to −125 each.
+		return fmt.Sprintf(
+			`You are the "Narrative / Correlated Story" model for the sport: %s.
+Build a coherent game-script slip with exactly %d leg(s) around −105 to −125 each when possible.
 Base every leg on recent articles from Action Network, Covers, Oddshark, or Hero Sports (no sportsbook blogs).
 For each leg, include a short "notes" rationale that stitches the story; avoid redundant overlap (e.g., same-team ML + alt spread).
-Set "title": "Narrative SGP".`, legsWanted)
+Set "title": "Narrative SGP".
+%s`, sport, legsWanted, payoutBlock)
 
 	case "weird", "obscure", "weird / obscure angles":
-		return fmt.Sprintf(`You are the "Weird / Obscure Angles" model.
-Create %d leg(s) from article-backed picks (Action Network / Covers / Oddshark / Hero Sports only).
+		return fmt.Sprintf(
+			`You are the "Weird / Obscure Angles" model for the sport: %s.
+Create exactly %d leg(s) from article-backed picks (Action Network / Covers / Oddshark / Hero Sports only).
 For each leg, add one quirky but real support in "notes" (e.g., umpire zone, Statcast pitch-type vs hitter, travel/park wind).
-Keep legs near −110; avoid conflicts. Title: "Weird Angles SGP".`, legsWanted)
+Keep legs near −110 and avoid conflicts.
+Title: "Weird Angles SGP".
+%s`, sport, legsWanted, payoutBlock)
 
-	case "random", "controlled randomness":
-		return fmt.Sprintf(`You are the "Controlled Randomness" model.
-From ~15 recent article-backed picks (Action Network / Covers / Oddshark / Hero Sports), transparently randomize to choose %d leg(s).
-Exclude in-play, heavy juice (<−140), or conflicting markets. Put selection index/seed in "notes" with a quick sanity check.
-Keep around −110. Title: "Controlled Random SGP".`, legsWanted)
+	case "random", "controlled randomness", "controlled randomness (for exploration)":
+		return fmt.Sprintf(
+			`You are the "Controlled Randomness" model for the sport: %s.
+From ~15 recent article-backed picks (Action Network / Covers / Oddshark / Hero Sports), transparently randomize to choose exactly %d leg(s).
+Exclude in-play, heavy juice (<−140), or conflicting markets. In "notes", include selection index/seed and a quick sanity check.
+Keep around −110.
+Title: "Controlled Random SGP".
+%s`, sport, legsWanted, payoutBlock)
 
-	case "contrarian", "market-based":
-		return fmt.Sprintf(`You are the "Market-Based / Contrarian" model.
-Select %d leg(s) where market signals disagree with public consensus (reverse line moves, handle≠tickets, computer pick vs public).
-For each leg, add a 'market quirk' in "notes": %% tickets vs %% handle, opener→current, off-market pockets. Keep ~−110.
-Base legs on articles from Action Network / Covers / Oddshark / Hero Sports. Title: "Contrarian SGP".`, legsWanted)
+	case "contrarian", "market-based", "market-based / contrarian (fade the crowd)":
+		return fmt.Sprintf(
+			`You are the "Market-Based / Contrarian" model for the sport: %s.
+Select exactly %d leg(s) where market signals disagree with public consensus (reverse line moves, handle≠tickets, computer pick vs public).
+For each leg, add a 'market quirk' in "notes": %% tickets vs %% handle, opener→current, off-market pockets. Keep ~−110; avoid redundant correlations.
+Base legs on articles from Action Network / Covers / Oddshark / Hero Sports.
+Title: "Contrarian SGP".
+%s`, sport, legsWanted, payoutBlock)
 
-	case "micro-edges", "micro":
-		return fmt.Sprintf(`You are the "Micro-Edges" model.
-Choose %d leg(s) where the edge is micro: bullpen fatigue (L3D), catcher framing/SB game, park & weather, defensive alignment quirks.
+	case "micro-edges", "micro", "micro edges", "micro-edges (injury/bullpen/park micro)":
+		return fmt.Sprintf(
+			`You are the "Micro-Edges" model for the sport: %s.
+Choose exactly %d leg(s) where the edge is micro: bullpen fatigue (L3D), catcher framing/SB game, park & weather, defensive alignment quirks.
 Each leg must originate from Action Network / Covers / Oddshark / Hero Sports; put the micro rationale in "notes". Keep ~−110.
-Title: "Micro-Edges SGP".`, legsWanted)
+Title: "Micro-Edges SGP".
+%s`, sport, legsWanted, payoutBlock)
 
-	case "pessimist", "underminer":
-		return fmt.Sprintf(`You are the "Pessimist / Underminer" model.
-Bias to UNDERS or less-happens outcomes. Build %d leg(s) from article-backed picks (Action Network / Covers / Oddshark / Hero Sports).
+	case "pessimist", "underminer", "pessimist / “underminer” (lean under on purpose)":
+		return fmt.Sprintf(
+			`You are the "Pessimist / Underminer" model for the sport: %s.
+Bias to UNDERS or less-happens outcomes. Build exactly %d leg(s) from article-backed picks (Action Network / Covers / Oddshark / Hero Sports).
 If the exact Under isn’t available, choose the nearest alt-under to keep legs ~−105 to −125. In "notes", add an extra pessimist check (weather drag, tight zone, fatigue, hidden regression, elite framer).
-Provide a short "rationale" summarizing the pessimistic script. Title: "Pessimist SGP".`, legsWanted)
+Provide a short "rationale" summarizing the pessimistic script.
+Title: "Pessimist SGP".
+%s`, sport, legsWanted, payoutBlock)
 
-	case "heat-check", "heat check":
-		return fmt.Sprintf(`You are the "Heat-Check / Regression" model.
-Focus on fading hot streaks. Build %d leg(s) from article-backed picks (Action Network / Covers / Oddshark / Hero Sports).
+	case "heat-check", "heat check", "heat-check / regression (fade the hot streak)":
+		return fmt.Sprintf(
+			`You are the "Heat-Check / Regression" model for the sport: %s.
+Focus on fading hot streaks. Build exactly %d leg(s) from article-backed picks (Action Network / Covers / Oddshark / Hero Sports).
 Keep ~−105 to −125 (use alt lines if needed) and add a "heat-check test" in "notes" (e.g., xwOBA−wOBA gap, xERA≫ERA, HR/FB%% spike, BABIP luck, opponent 3PT luck).
-Provide a brief "rationale" for the regression thesis. Title: "Heat-Check SGP".`, legsWanted)
+Provide a brief "rationale" for the regression thesis.
+Title: "Heat-Check SGP".
+%s`, sport, legsWanted, payoutBlock)
 
 	default:
-		return fmt.Sprintf(`You are the "Narrative / Correlated Story" model (default).
-Build %d coherent leg(s) ~−105 to −125 from Action Network / Covers / Oddshark / Hero Sports. Use "notes" to stitch a single game script.
-Title: "Narrative SGP".`, legsWanted)
+		return fmt.Sprintf(
+			`You are the "Narrative / Correlated Story" model (default) for the sport: %s.
+Build exactly %d coherent leg(s) ~−105 to −125 from Action Network / Covers / Oddshark / Hero Sports. Use "notes" to stitch a single game script.
+Title: "Narrative SGP".
+%s`, sport, legsWanted, payoutBlock)
 	}
+}
+
+// Shared payout guidance appended to every model wrapper.
+// Describes: SGP "tax", optional boostPct, decimal conversion, and keeping within bounds when provided.
+func payoutGuidance(minOdds, maxOdds, boostPct float64, legs int, sport string) string {
+	var b strings.Builder
+	b.WriteString("\nPayout estimation instructions:\n")
+	b.WriteString("- Convert each leg's American odds o to decimal multiple m: if o >= 0 then m = 1 + (o/100); if o < 0 then m = 1 + (100/|o|).\n")
+	b.WriteString("- Multiply all m across the ")
+	b.WriteString(fmt.Sprintf("%d", legs))
+	b.WriteString(" legs to get parlayMultiple.\n")
+	b.WriteString("- Apply an SGP correlation tax τ in [0.85, 0.95] (use 0.92 by default) → preBoostMultiple = parlayMultiple × τ.\n")
+	if boostPct > 0 {
+		b.WriteString(fmt.Sprintf("- Apply the sportsbook boost AFTER tax: postBoostMultiple = preBoostMultiple × (1 + %.0f/100).\n", boostPct))
+	} else {
+		b.WriteString("- No boost: postBoostMultiple = preBoostMultiple.\n")
+	}
+	b.WriteString("- Convert multiples to American odds (usually positive for parlays): american = '+' + round((multiple−1)×100).\n")
+	if minOdds >= 100 || maxOdds >= 100 {
+		b.WriteString("- Try to keep the POST-BOOST American payout within the user range ")
+		if minOdds >= 100 && maxOdds >= 100 {
+			b.WriteString(fmt.Sprintf("[+%.0f, +%.0f]", minOdds, maxOdds))
+		} else if minOdds >= 100 {
+			b.WriteString(fmt.Sprintf("[≥ +%.0f]", minOdds))
+		} else {
+			b.WriteString(fmt.Sprintf("[≤ +%.0f]", maxOdds))
+		}
+		b.WriteString(" if reasonable; it's okay to exceed modestly when leg count or sport constraints require it.\n")
+	}
+	b.WriteString("- Populate the JSON field \"estimatedPayout\" with preBoostMultiple, preBoostAmerican, postBoostMultiple, postBoostAmerican, and a one-line 'assumptions' summary (e.g., leg prices used, τ value, boost applied).\n")
+	return b.String()
 }
 
 func orDefault(s, def string) string {
