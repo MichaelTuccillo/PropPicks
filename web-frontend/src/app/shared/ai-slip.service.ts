@@ -10,6 +10,7 @@ export interface AiFilters {
   minOdds: number;
   maxOdds: number;
   model: string; // exactly one selected
+  boostPct?: number;
 }
 
 export interface AiSlipLeg {

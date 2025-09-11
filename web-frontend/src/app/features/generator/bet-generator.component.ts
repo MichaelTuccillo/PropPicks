@@ -155,7 +155,8 @@ export class BetGeneratorComponent {
     !this.oddsInvalid('max') &&
     (this.mode() === 'Single' ? this.legs() === 1 : this.legs() >= 1) &&
     this.slips() >= 1 &&
-    this.selectedIds().size > 0
+    this.selectedIds().size == 1 &&
+    !this.boostInvalid()
   );
 
   generate() {
@@ -228,6 +229,7 @@ export class BetGeneratorComponent {
         minOdds: Number(anyThis.minOdds?.() ?? 0),
         maxOdds: Number(anyThis.maxOdds?.() ?? 0),
         model:  this.selectedModel(),
+        boostPct: this.boostEnabled() ? (this.boostPct() ?? 0) : 0,
     };
 
     this.ai.generateSlip(filters).subscribe({
@@ -243,4 +245,26 @@ export class BetGeneratorComponent {
 
   discardAiSlip() { this.aiSlip.set(null); }
   saveAiSlip() { /* hook up later */ }
+
+  // === NEW signals ===
+  boostEnabled = signal(false);
+  boostPct = signal<number | null>(null);
+
+  // === NEW helpers ===
+  toggleBoost(checked: boolean) {
+    this.boostEnabled.set(checked);
+    if (!checked) this.boostPct.set(null);
+  }
+
+  onBoostInput(ev: Event) {
+    const v = Number((ev.target as HTMLInputElement).value);
+    this.boostPct.set(Number.isFinite(v) ? v : null);
+  }
+
+  boostInvalid(): boolean {
+    if (!this.boostEnabled()) return false;
+    const v = this.boostPct();
+    return v == null || v < 0 || v > 100;
+  }
+
 }

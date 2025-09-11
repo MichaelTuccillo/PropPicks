@@ -19,14 +19,14 @@ type generateSlipRequest struct {
 }
 
 type GenerateFilters struct {
-	Sport     string  `json:"sport"`     // e.g., "NFL", "MLB"
-	Mode      string  `json:"mode"`      // "Single" | "SGP" | "SGP+"
-	Legs      int     `json:"legs"`      // desired legs (ignored when Single)
-	Slips     int     `json:"slips"`     // requested count; we still produce one best slip
-	MinOdds   float64 `json:"minOdds"`   // if >= +100, treat as overall payout lower bound
-	MaxOdds   float64 `json:"maxOdds"`   // if >= +100, treat as overall payout upper bound
-	Model     string  `json:"model"`     // exactly one selected model
-	BoostPct  float64 `json:"boostPct"`  // e.g., 0, 30, 50 (percentage)
+	Sport    string  `json:"sport"`    // e.g., "NFL", "MLB"
+	Mode     string  `json:"mode"`     // "Single" | "SGP" | "SGP+"
+	Legs     int     `json:"legs"`     // desired legs (ignored when Single)
+	Slips    int     `json:"slips"`    // requested count; we still produce one best slip
+	MinOdds  float64 `json:"minOdds"`  // if >= +100, treat as overall payout lower bound
+	MaxOdds  float64 `json:"maxOdds"`  // if >= +100, treat as overall payout upper bound
+	Model    string  `json:"model"`    // exactly one selected model
+	BoostPct float64 `json:"boostPct"` // e.g., 0, 30, 50 (percentage)
 }
 
 /* ---------------- Model Output ---------------- */
@@ -79,7 +79,7 @@ type openAIChatResp struct {
 /* ---------------- Handler (LIVE MODE) ---------------- */
 
 // POST /api/generate-slip
-// Calls OpenAI, still logs the prompt for debugging, returns parsed JSON slip.
+// Calls OpenAI, logs the prompt AND what was returned, then responds with parsed JSON.
 func handleGenerateSlip(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -92,16 +92,14 @@ func handleGenerateSlip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build prompt
 	prompt := buildPromptFromFilters(req.Filters)
 
-	// ----- PRINT TO TERMINAL (debug) -----
-	log.Println("----- /api/generate-slip LIVE PROMPT -----")
+	// ----- PRINT PROMPT (debug) -----
+	log.Println("----- /api/generate-slip PROMPT -----")
 	log.Printf("Filters: %+v\n", req.Filters)
 	log.Println("----- BEGIN PROMPT -----")
 	log.Println(prompt)
 	log.Println("------ END PROMPT ------")
-	// -------------------------------------
 
 	// Env/config
 	key := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
@@ -111,7 +109,7 @@ func handleGenerateSlip(w http.ResponseWriter, r *http.Request) {
 	}
 	apiModel := strings.TrimSpace(os.Getenv("OPENAI_MODEL"))
 	if apiModel == "" {
-		apiModel = "gpt-4o-mini" // default; change via env if you prefer
+		apiModel = "gpt-4o-mini"
 	}
 	base := strings.TrimSpace(os.Getenv("OPENAI_BASE_URL"))
 	if base == "" {
@@ -147,15 +145,21 @@ func handleGenerateSlip(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	slurp, _ := io.ReadAll(resp.Body)
+
+	// ----- PRINT RAW OPENAI BODY -----
+	log.Println("----- OPENAI RAW HTTP BODY -----")
+	log.Println(string(slurp))
+	log.Println("----- END RAW BODY -----")
+
 	if resp.StatusCode/100 != 2 {
-		log.Printf("[generate-slip] openai non-2xx: status=%d body=%s", resp.StatusCode, string(slurp))
+		log.Printf("[generate-slip] openai non-2xx: status=%d", resp.StatusCode)
 		errorJSON(w, http.StatusBadGateway, strings.TrimSpace(string(slurp)))
 		return
 	}
 
 	var ai openAIChatResp
 	if err := json.Unmarshal(slurp, &ai); err != nil {
-		log.Printf("[generate-slip] decode error: %v; raw=%s", err, string(slurp))
+		log.Printf("[generate-slip] decode error: %v; raw preserved above", err)
 		errorJSON(w, http.StatusBadGateway, "bad openai response")
 		return
 	}
@@ -166,10 +170,16 @@ func handleGenerateSlip(w http.ResponseWriter, r *http.Request) {
 
 	content := strings.TrimSpace(ai.Choices[0].Message.Content)
 
+	// ----- PRINT CHOICE CONTENT -----
+	log.Println("----- OPENAI CHOICE CONTENT -----")
+	log.Println(content)
+	log.Println("----- END CHOICE CONTENT -----")
+
 	// Parse model JSON -> betSlip
 	var slip betSlip
 	if err := json.Unmarshal([]byte(content), &slip); err != nil {
 		// Fallback: still return something so UI can render
+		log.Printf("[generate-slip] JSON parse failed; returning raw content as a single-leg slip")
 		slip = betSlip{
 			Title:     "Generated Slip",
 			Event:     "",
@@ -178,6 +188,13 @@ func handleGenerateSlip(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		slip.CreatedAt = time.Now().UTC()
+	}
+
+	// ----- PRINT PARSED SLIP (WHAT WE RETURN) -----
+	if bs, err := json.MarshalIndent(slip, "", "  "); err == nil {
+		log.Println("----- PARSED SLIP (SENT TO CLIENT) -----")
+		log.Println(string(bs))
+		log.Println("----- END PARSED SLIP -----")
 	}
 
 	writeJSON(w, http.StatusOK, slip)
@@ -235,36 +252,6 @@ func buildPromptFromFilters(f GenerateFilters) string {
   "rationale": "string(optional)"
 }` + "\n\n")
 
-	// Context (only fields your page supplies)
-	if sport != "" {
-		sb.WriteString("- Sport: " + sport + "\n")
-	}
-	sb.WriteString("- Mode: " + orDefault(f.Mode, "SGP") + "\n")
-	sb.WriteString(fmt.Sprintf("- Desired legs: %d\n", legsWanted))
-	if f.Slips > 0 {
-		sb.WriteString(fmt.Sprintf("- User requested %d slip(s); return ONE best slip.\n", f.Slips))
-	}
-
-	// Target payout bounds (if provided as positive American)
-	if minPayoutBound != "" || maxPayoutBound != "" {
-		sb.WriteString("- Target final payout (American) after applying SGP tax and then boost: ")
-		if minPayoutBound != "" && maxPayoutBound != "" {
-			sb.WriteString(fmt.Sprintf("%s to %s (okay to exceed modestly if leg count forces it)\n", minPayoutBound, maxPayoutBound))
-		} else if minPayoutBound != "" {
-			sb.WriteString(fmt.Sprintf(">= %s (okay to exceed modestly)\n", minPayoutBound))
-		} else {
-			sb.WriteString(fmt.Sprintf("<= %s (okay to exceed modestly)\n", maxPayoutBound))
-		}
-	}
-
-	// Boost guidance
-	if f.BoostPct > 0 {
-		sb.WriteString(fmt.Sprintf("- Sportsbook boost to apply AFTER SGP tax: %.0f%%\n", f.BoostPct))
-	} else {
-		sb.WriteString("- No sportsbook boost (boostPct = 0)\n")
-	}
-	sb.WriteString("\n")
-
 	// Model-specific instructions (sport-aware + payout-aware + SGP/SGP+ rules)
 	sb.WriteString(promptForModel(model, legsWanted, sport, f.MinOdds, f.MaxOdds, f.BoostPct, f.Mode))
 	return sb.String()
@@ -280,7 +267,7 @@ func promptForModel(model string, legsWanted int, sport string, minOdds, maxOdds
 		return fmt.Sprintf(
 			`You are the "Narrative / Correlated Story" model for the sport: %s.
 %s
-Build a coherent game-script slip with exactly %d leg(s) around −105 to −125 each when possible.
+Build a coherent game-script slip with exactly %d leg(s).
 Base every leg on recent articles from Action Network, Covers, Oddshark, or Hero Sports (no sportsbook blogs).
 For each leg, include a short "notes" rationale that stitches the story; avoid redundant overlap (e.g., same-team ML + alt spread).
 Set "title": "Narrative SGP".

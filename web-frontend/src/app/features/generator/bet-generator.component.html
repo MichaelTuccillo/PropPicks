@@ -56,8 +56,7 @@
           matInput
           type="number"
           [attr.step]="5"
-          [value]="minOdds()
-          "
+          [value]="minOdds()"
           (input)="onOddsInput('min', $event)"
         />
         <mat-error *ngIf="oddsInvalid('min')">
@@ -80,20 +79,46 @@
       </mat-form-field>
     </div>
 
+    <!-- NEW: Bet boost -->
+    <div class="row">
+      <div class="full" style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+        <mat-checkbox
+          [checked]="boostEnabled()"
+          (change)="toggleBoost($event.checked)">
+          Bet boost
+        </mat-checkbox>
+
+        <mat-form-field
+          *ngIf="boostEnabled()"
+          appearance="outline"
+          class="half"
+          style="max-width:260px;">
+          <mat-label>Boost %</mat-label>
+          <input
+            matInput
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            [value]="boostPct() ?? ''"
+            (input)="onBoostInput($event)" />
+          <span matSuffix>%</span>
+          <mat-error *ngIf="boostInvalid()">
+            Enter a value between 0 and 100.
+          </mat-error>
+        </mat-form-field>
+      </div>
+    </div>
+
     <!-- Models -->
     <div class="row models-head">
       <h3 class="sub">Models</h3>
       <div class="actions">
         <span class="muted">(choose one)</span>
-        <!-- Removed "Select all" to enforce single-select -->
         <a (click)="clearModels()">Clear</a>
       </div>
     </div>
 
-    <!-- Single-select behavior:
-         Clicking any model will first clear all, then select that model.
-         (No TS changes required; uses your existing clearModels() + toggleModel(..., true))
-    -->
     <div class="row checks">
       <label class="check" *ngFor="let m of models(); trackBy: trackModel">
         <mat-checkbox
