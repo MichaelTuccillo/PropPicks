@@ -124,7 +124,7 @@ func handleGenerateSlip(w http.ResponseWriter, r *http.Request) {
 			{Role: "system", Content: "You must output valid JSON only. Never include markdown code fences."},
 			{Role: "user", Content: prompt},
 		},
-		Temperature: 1,     // gpt-5-mini only supports the default (1)
+		Temperature: 1, // gpt-5-mini only supports the default (1)
 	}
 	payload, _ := json.Marshal(body)
 
@@ -221,13 +221,17 @@ func buildPromptFromFilters(f GenerateFilters) string {
 	}
 	sport := strings.TrimSpace(f.Sport)
 
+	// Current time in America/Toronto to gate out already-started games
+	loc, _ := time.LoadLocation("America/Toronto")
+	now := time.Now().In(loc).Format("Mon Jan 2 2006 15:04 MST")
+
 	var sb strings.Builder
 
 	// JSON schema your UI expects
 	sb.WriteString("Return ONLY JSON with this schema:\n")
 	sb.WriteString(`{
   "title": "string",
-  "event": "string",
+  "event": "string (include matchup and local start date/time, e.g., 'Jets @ Bills, Thu Sep 11, 8:15 PM ET')",
   "legs": [
     {"market":"string","pick":"string","line":"string(optional)","odds":"string(optional)","notes":"string(optional)"}
   ],
@@ -241,6 +245,11 @@ func buildPromptFromFilters(f GenerateFilters) string {
   },
   "rationale": "string(optional)"
 }` + "\n\n")
+
+	// Add current-time directive for game eligibility and event formatting
+	sb.WriteString(fmt.Sprintf("Current time (America/Toronto): %s\n", now))
+	sb.WriteString("Only use pre-game markets for games that have NOT started as of the current time above. Do not use in-play or finished games.\n")
+	sb.WriteString("Populate \"event\" with the matchup plus local start date/time for the relevant game(s). For SGP+, list all games used separated by '; '.\n\n")
 
 	// Model-specific instructions (sport-aware + payout-aware + SGP/SGP+ rules)
 	sb.WriteString(promptForModel(model, legsWanted, sport, f.MinOdds, f.MaxOdds, f.BoostPct, f.Mode))
@@ -258,6 +267,8 @@ func promptForModel(model string, legsWanted int, sport string, minOdds, maxOdds
 			`You are the "Narrative / Correlated Story" model for the sport: %s.
 %s
 Build a coherent game-script slip with exactly %d leg(s).
+- Use only upcoming games that have not started as of the current time above.
+- Populate "event" with the matchup and local start date/time for the game(s).
 Base every leg on recent articles from Action Network, Covers, Oddshark, or Hero Sports (no sportsbook blogs).
 For each leg, include a short "notes" rationale that stitches the story; avoid redundant overlap (e.g., same-team ML + alt spread).
 Set "title": "Narrative SGP".
@@ -268,8 +279,10 @@ Set "title": "Narrative SGP".
 			`You are the "Weird / Obscure Angles" model for the sport: %s.
 %s
 Create exactly %d leg(s) from article-backed picks (Action Network / Covers / Oddshark / Hero Sports only).
+- Use only upcoming games that have not started as of the current time above.
+- Populate "event" with the matchup and local start date/time for the game(s).
 For each leg, add one quirky but real support in "notes" (e.g., umpire zone, Statcast pitch-type vs hitter, travel/park wind).
-Keep legs near −110 and avoid conflicts.
+Avoid conflicts among legs.
 Title: "Weird Angles SGP".
 %s`, sport, modeRules, legsWanted, payoutBlock)
 
@@ -277,9 +290,10 @@ Title: "Weird Angles SGP".
 		return fmt.Sprintf(
 			`You are the "Controlled Randomness" model for the sport: %s.
 %s
-From ~15 recent article-backed picks (Action Network / Covers / Oddshark / Hero Sports), transparently randomize to choose exactly %d leg(s).
+From a pool of recent article-backed picks (Action Network / Covers / Oddshark / Hero Sports), transparently randomize to choose exactly %d leg(s).
+- Use only upcoming games that have not started as of the current time above.
+- Populate "event" with the matchup and local start date/time for the game(s).
 Exclude in-play, heavy juice (<−140), or conflicting markets. In "notes", include selection index/seed and a quick sanity check.
-Keep around −110.
 Title: "Controlled Random SGP".
 %s`, sport, modeRules, legsWanted, payoutBlock)
 
@@ -288,7 +302,9 @@ Title: "Controlled Random SGP".
 			`You are the "Market-Based / Contrarian" model for the sport: %s.
 %s
 Select exactly %d leg(s) where market signals disagree with public consensus (reverse line moves, handle≠tickets, computer pick vs public).
-For each leg, add a 'market quirk' in "notes": %% tickets vs %% handle, opener→current, off-market pockets. Keep ~−110; avoid redundant correlations.
+- Use only upcoming games that have not started as of the current time above.
+- Populate "event" with the matchup and local start date/time for the game(s).
+For each leg, add a 'market quirk' in "notes": %% tickets vs %% handle, opener→current, off-market pockets. Avoid redundant correlations.
 Base legs on articles from Action Network / Covers / Oddshark / Hero Sports.
 Title: "Contrarian SGP".
 %s`, sport, modeRules, legsWanted, payoutBlock)
@@ -297,8 +313,10 @@ Title: "Contrarian SGP".
 		return fmt.Sprintf(
 			`You are the "Micro-Edges" model for the sport: %s.
 %s
-Choose exactly %d leg(s) where the edge is micro: bullpen fatigue (L3D), catcher framing/SB game, park & weather, defensive alignment quirks.
-Each leg must originate from Action Network / Covers / Oddshark / Hero Sports; put the micro rationale in "notes". Keep ~−110.
+Choose exactly %d leg(s) where the edge is micro: bullpen fatigue (L3D), catcher framing/SB game, park and weather, defensive alignment quirks.
+- Use only upcoming games that have not started as of the current time above.
+- Populate "event" with the matchup and local start date/time for the game(s).
+Each leg must originate from Action Network / Covers / Oddshark / Hero Sports; put the micro rationale in "notes".
 Title: "Micro-Edges SGP".
 %s`, sport, modeRules, legsWanted, payoutBlock)
 
@@ -307,7 +325,9 @@ Title: "Micro-Edges SGP".
 			`You are the "Pessimist / Underminer" model for the sport: %s.
 %s
 Bias to UNDERS or less-happens outcomes. Build exactly %d leg(s) from article-backed picks (Action Network / Covers / Oddshark / Hero Sports).
-If the exact Under isn’t available, choose the nearest alt-under to keep legs ~−105 to −125. In "notes", add an extra pessimist check (weather drag, tight zone, fatigue, hidden regression, elite framer).
+- Use only upcoming games that have not started as of the current time above.
+- Populate "event" with the matchup and local start date/time for the game(s).
+If the exact Under in the article isn’t available, choose the nearest alt-under. In "notes", add an extra pessimist check (weather drag, tight zone, fatigue, hidden regression, elite framer).
 Provide a short "rationale" summarizing the pessimistic script.
 Title: "Pessimist SGP".
 %s`, sport, modeRules, legsWanted, payoutBlock)
@@ -317,7 +337,9 @@ Title: "Pessimist SGP".
 			`You are the "Heat-Check / Regression" model for the sport: %s.
 %s
 Focus on fading hot streaks. Build exactly %d leg(s) from article-backed picks (Action Network / Covers / Oddshark / Hero Sports).
-Keep ~−105 to −125 (use alt lines if needed) and add a "heat-check test" in "notes" (e.g., xwOBA−wOBA gap, xERA≫ERA, HR/FB%% spike, BABIP luck, opponent 3PT luck).
+- Use only upcoming games that have not started as of the current time above.
+- Populate "event" with the matchup and local start date/time for the game(s).
+Add a "heat-check test" in "notes" (e.g., xwOBA−wOBA gap, xERA≫ERA, HR/FB%% spike, BABIP luck, opponent 3PT luck).
 Provide a brief "rationale" for the regression thesis.
 Title: "Heat-Check SGP".
 %s`, sport, modeRules, legsWanted, payoutBlock)
@@ -326,7 +348,10 @@ Title: "Heat-Check SGP".
 		return fmt.Sprintf(
 			`You are the "Narrative / Correlated Story" model (default) for the sport: %s.
 %s
-Build exactly %d coherent leg(s) ~−105 to −125 from Action Network / Covers / Oddshark / Hero Sports. Use "notes" to stitch a single game script.
+Build exactly %d coherent leg(s) from Action Network / Covers / Oddshark / Hero Sports.
+- Use only upcoming games that have not started as of the current time above.
+- Populate "event" with the matchup and local start date/time for the game(s).
+Use "notes" to stitch a single game script.
 Title: "Narrative SGP".
 %s`, sport, modeRules, legsWanted, payoutBlock)
 	}
@@ -336,11 +361,11 @@ Title: "Narrative SGP".
 func sgpRules(mode string) string {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "single":
-		return "- Bet type rules: SINGLE — one standalone selection (not a parlay). Ignore SGP/SGP+ constraints."
+		return "- Bet type rules: SINGLE - one standalone selection (not a parlay). Ignore SGP/SGP+ constraints."
 	case "sgp":
-		return "- Bet type rules: SGP — ALL legs must be from the SAME game (a true same-game parlay)."
+		return "- Bet type rules: SGP - ALL legs must be from the SAME game (a true same-game parlay). Set \"event\" to that single matchup with start date/time."
 	case "sgp+":
-		return "- Bet type rules: SGP+ — At least TWO legs must come from the SAME specific game; remaining legs may be from distinct games. Clearly indicate which legs share the same game."
+		return "- Bet type rules: SGP+ - At least TWO legs must come from the SAME specific game; remaining legs may be from distinct games. In \"event\", list all matchups used, each with start date/time, separated by '; '."
 	default:
 		return "- Bet type rules: (unspecified) default to SGP behavior unless impossible."
 	}
