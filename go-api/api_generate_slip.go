@@ -221,16 +221,6 @@ func buildPromptFromFilters(f GenerateFilters) string {
 	}
 	sport := strings.TrimSpace(f.Sport)
 
-	// If min/max look like overall payout bounds (positive American)
-	minPayoutBound := ""
-	maxPayoutBound := ""
-	if f.MinOdds >= 100 {
-		minPayoutBound = fmt.Sprintf("+%.0f", f.MinOdds)
-	}
-	if f.MaxOdds >= 100 {
-		maxPayoutBound = fmt.Sprintf("+%.0f", f.MaxOdds)
-	}
-
 	var sb strings.Builder
 
 	// JSON schema your UI expects
