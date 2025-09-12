@@ -209,13 +209,11 @@ func handlePastBetResult(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Normalize/validate the result value; accept any casing
+	// Normalize & validate
 	res := strings.ToLower(strings.TrimSpace(p.Result))
 	switch res {
 	case "win", "loss", "push", "":
-		// ok
 	default:
-		// Unknown token -> clear the result
 		res = ""
 	}
 
@@ -230,7 +228,7 @@ func handlePastBetResult(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// compute units delta vs previous
+		// compute units delta
 		prev := ""
 		if rec.Result != nil {
 			prev = *rec.Result
@@ -254,13 +252,12 @@ func handlePastBetResult(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// update aggregate stats
+		// update aggregates
 		if err := upsertUserModelStat(DB, userKey, rec.Model, rec.Sport, prev, res, prevUnits, newUnits); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "stats update error")
 			return
 		}
 
-		// respond with the updated row
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "bet": toPublic(rec)})
 		return
 	}
@@ -272,7 +269,6 @@ func handlePastBetResult(w http.ResponseWriter, r *http.Request) {
 /* ===================== DB helpers ====================== */
 
 func trimPastBetsGorm(db *gorm.DB, userKey string, keep int) error {
-	// Keep newest N by date/created_at; delete anything else
 	var ids []string
 	if err := db.Model(&PastBetRecord{}).
 		Where("user_key = ?", userKey).
@@ -300,7 +296,6 @@ func unitsForOutcome(odds string, outcome string, stake float64) float64 {
 	case "push":
 		return 0
 	case "win":
-		// continue
 	default:
 		return 0
 	}

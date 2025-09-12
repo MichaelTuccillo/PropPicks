@@ -42,14 +42,12 @@ export class PastBetsService {
       .pipe(takeUntil(this.auth.logout$));
   }
 
-  /** Grade a bet. Accepts 'win'|'loss'|'push' in any casing; normalizes to lower-case. */
-  setResult(id: string, result: 'win' | 'loss' | 'push' | ''): Observable<{ ok: boolean }> {
+  /** Grade a bet: 'win'|'loss'|'push' (any casing accepted server-side) */
+  setResult(id: string, result: 'win'|'loss'|'push'|''): Observable<{ ok: boolean }> {
     if (!this.isAuthed()) return of({ ok: false });
     const normalized = (result || '').toString().trim().toLowerCase() as 'win'|'loss'|'push'|'';
-    return this.http.post<{ ok: boolean }>(
-      `${this.base}/result`,
-      { id, result: normalized },
-      { withCredentials: true }
+    return this.http.post<{ ok: boolean; bet?: PastBet }>(
+      `${this.base}/result`, { id, result: normalized }, { withCredentials: true }
     ).pipe(takeUntil(this.auth.logout$));
   }
 }

@@ -55,3 +55,91 @@
   padding: 10px 12px;
 }
 .demo-banner mat-icon { color: #ffc107; }
+
+/* Force pointer cursor on Material MDC chip internals */
+:host ::ng-deep .grade-set .mat-mdc-chip,
+:host ::ng-deep .grade-set .mat-mdc-chip .mdc-evolution-chip__action,
+:host ::ng-deep .grade-set .mat-mdc-chip .mdc-evolution-chip__action--primary {
+  cursor: pointer !important;
+}
+
+/* Make chips feel like real buttons */
+.grade-set {
+  display: inline-flex;
+  gap: .25rem;
+}
+
+.grade-chip {
+  /* still keep pointer on the host for non-MDC contexts */
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  border: 1px solid #e5e7eb;  /* slate-200 */
+  background: #fff;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .04s ease-in-out;
+
+  &:active {
+    transform: translateY(1px);
+  }
+
+  &.win {
+    &:not(.is-selected):hover {
+      background: #dcfce7;    /* green-100 */
+      border-color: #86efac;  /* green-300 */
+      color: #166534;         /* green-800 */
+    }
+    &.is-selected {
+      background: #16a34a;    /* green-600 */
+      border-color: #16a34a;
+      color: #fff;
+    }
+  }
+
+  &.loss {
+    &:not(.is-selected):hover {
+      background: #fee2e2;    /* red-100 */
+      border-color: #fca5a5;  /* red-300 */
+      color: #7f1d1d;         /* red-900 */
+    }
+    &.is-selected {
+      background: #dc2626;    /* red-600 */
+      border-color: #dc2626;
+      color: #fff;
+    }
+  }
+
+  &.push {
+    &:not(.is-selected):hover {
+      background: #e0f2fe;    /* sky-100 */
+      border-color: #7dd3fc;  /* sky-300 */
+      color: #0c4a6e;         /* sky-900 */
+    }
+    &.is-selected {
+      background: #0ea5e9;    /* sky-500 */
+      border-color: #0ea5e9;
+      color: #fff;
+    }
+  }
+
+  &.clear {
+    &:not(.is-selected):hover {
+      background: #f1f5f9;    /* slate-100 */
+      border-color: #cbd5e1;  /* slate-300 */
+      color: #334155;         /* slate-700 */
+    }
+    &.is-selected {
+      background: #64748b;    /* slate-500 */
+      border-color: #64748b;
+      color: #fff;
+    }
+  }
+}
+
+/* Result units colors */
+.res {
+  font-weight: 700;
+}
+.res-win  { color: #16a34a; } /* green-600 */
+.res-loss { color: #dc2626; } /* red-600  */
+.res-push { color: #64748b; } /* slate-500 */
+.res-none { color: #94a3b8; } /* slate-400 */

@@ -63,68 +63,100 @@
     </div>
   </div>
 
-  <!-- Recent Bets table -->
-  <div class="section">
-    <h3>Recent bets</h3>
+  <table mat-table [dataSource]="recent()" class="mat-elevation-z1 w-full">
 
-    <table mat-table [dataSource]="recent()" class="mat-elevation-z1 bets-table">
-      <ng-container matColumnDef="date">
-        <th mat-header-cell *matHeaderCellDef>Date</th>
-        <td mat-cell *matCellDef="let r">{{ r.date | date:'MMM d, HH:mm' }}</td>
-      </ng-container>
+    <!-- Date -->
+    <ng-container matColumnDef="date">
+      <th mat-header-cell *matHeaderCellDef>Date</th>
+      <td mat-cell *matCellDef="let row">{{ row.date | date:'MMM d, y, h:mm a' }}</td>
+    </ng-container>
 
-      <ng-container matColumnDef="model">
-        <th mat-header-cell *matHeaderCellDef>Model</th>
-        <td mat-cell *matCellDef="let r">{{ r.modelName }}</td>
-      </ng-container>
+    <!-- Model -->
+    <ng-container matColumnDef="model">
+      <th mat-header-cell *matHeaderCellDef>Model</th>
+      <td mat-cell *matCellDef="let row">{{ row.modelName }}</td>
+    </ng-container>
 
-      <ng-container matColumnDef="sport">
-        <th mat-header-cell *matHeaderCellDef>Sport</th>
-        <td mat-cell *matCellDef="let r">{{ r.sport }}</td>
-      </ng-container>
+    <!-- Sport -->
+    <ng-container matColumnDef="sport">
+      <th mat-header-cell *matHeaderCellDef>Sport</th>
+      <td mat-cell *matCellDef="let row">{{ row.sport }}</td>
+    </ng-container>
 
-      <ng-container matColumnDef="event">
-        <th mat-header-cell *matHeaderCellDef>Event</th>
-        <td mat-cell *matCellDef="let r">{{ r.event }}</td>
-      </ng-container>
+    <!-- Event -->
+    <ng-container matColumnDef="event">
+      <th mat-header-cell *matHeaderCellDef>Event</th>
+      <td mat-cell *matCellDef="let row">{{ row.event }}</td>
+    </ng-container>
 
-      <ng-container matColumnDef="type">
-        <th mat-header-cell *matHeaderCellDef>Type</th>
-        <td mat-cell *matCellDef="let r">{{ r.betType }}</td>
-      </ng-container>
+    <!-- Type -->
+    <ng-container matColumnDef="type">
+      <th mat-header-cell *matHeaderCellDef>Type</th>
+      <td mat-cell *matCellDef="let row">{{ row.betType }}</td>
+    </ng-container>
 
-      <ng-container matColumnDef="odds">
-        <th mat-header-cell *matHeaderCellDef>Odds</th>
-        <td mat-cell *matCellDef="let r">{{ r.combinedOdds }}</td>
-      </ng-container>
+    <!-- Odds -->
+    <ng-container matColumnDef="odds">
+      <th mat-header-cell *matHeaderCellDef>Odds</th>
+      <td mat-cell *matCellDef="let row">{{ row.combinedOdds }}</td>
+    </ng-container>
 
-      <!-- New: grade controls -->
-      <ng-container matColumnDef="grade">
-        <th mat-header-cell *matHeaderCellDef>Set Result</th>
-        <td mat-cell *matCellDef="let r">
-          <mat-button-toggle-group
-            [value]="r.result || ''"
-            (valueChange)="grade(r, $event)"
-            class="mini-toggles">
-            <mat-button-toggle value="win">Win</mat-button-toggle>
-            <mat-button-toggle value="loss">Loss</mat-button-toggle>
-            <mat-button-toggle value="push">Push</mat-button-toggle>
-            <mat-button-toggle value="">Clear</mat-button-toggle>
-          </mat-button-toggle-group>
-        </td>
-      </ng-container>
+    <!-- Grade controls -->
+    <ng-container matColumnDef="grade">
+      <th mat-header-cell *matHeaderCellDef>Grade</th>
+      <td mat-cell *matCellDef="let row">
+        <mat-chip-set class="grade-set">
+          <mat-chip
+            class="grade-chip win"
+            [class.is-selected]="row.result === 'win'"
+            (click)="grade(row, 'win')"
+            selectable="false"
+            aria-pressed="{{ row.result === 'win' }}"
+            title="Mark as Win"
+          >Win</mat-chip>
 
-      <ng-container matColumnDef="result">
-        <th mat-header-cell *matHeaderCellDef>Result (u)</th>
-        <td mat-cell *matCellDef="let r">
-          <span [class.pos]="(r.resultUnits ?? 0) >= 0" [class.neg]="(r.resultUnits ?? 0) < 0">
-            {{ (r.resultUnits ?? 0) | number:'1.2-2' }}
-          </span>
-        </td>
-      </ng-container>
+          <mat-chip
+            class="grade-chip loss"
+            [class.is-selected]="row.result === 'loss'"
+            (click)="grade(row, 'loss')"
+            selectable="false"
+            aria-pressed="{{ row.result === 'loss' }}"
+            title="Mark as Loss"
+          >Loss</mat-chip>
 
-      <tr mat-header-row *matHeaderRowDef="['date','model','sport','event','type','odds','grade','result']"></tr>
-      <tr mat-row *matRowDef="let row; columns: ['date','model','sport','event','type','odds','grade','result'];"></tr>
-    </table>
-  </div>
+          <mat-chip
+            class="grade-chip push"
+            [class.is-selected]="row.result === 'push'"
+            (click)="grade(row, 'push')"
+            selectable="false"
+            aria-pressed="{{ row.result === 'push' }}"
+            title="Mark as Push"
+          >Push</mat-chip>
+
+          <mat-chip
+            class="grade-chip clear"
+            [class.is-selected]="!row.result"
+            (click)="grade(row, '')"
+            selectable="false"
+            aria-pressed="{{ !row.result }}"
+            title="Clear result"
+          >Clear</mat-chip>
+        </mat-chip-set>
+      </td>
+    </ng-container>
+
+    <!-- Result units -->
+    <ng-container matColumnDef="result">
+      <th mat-header-cell *matHeaderCellDef>Result</th>
+      <td mat-cell *matCellDef="let row">
+        <span [ngClass]="resultClass(row)">
+          {{ formatUnits(row) }}
+        </span>
+      </td>
+    </ng-container>
+
+    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+    <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+  </table>
+
 </div>

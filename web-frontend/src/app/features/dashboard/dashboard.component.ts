@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal, DestroyRef } from '@angular/core';
-import { NgFor, NgIf, DatePipe, DecimalPipe, isPlatformBrowser } from '@angular/common';
+import { NgFor, NgIf, DatePipe, NgClass, isPlatformBrowser } from '@angular/common';
 import { PLATFORM_ID } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
@@ -45,7 +45,7 @@ const SERIES_COLORS = ['#60a5fa','#22c55e','#eab308','#2dd4bf','#94a3b8','#f8717
   selector: 'app-dashboard',
   standalone: true,
   imports: [
-    NgFor, NgIf, DatePipe, DecimalPipe, RouterLink,
+    NgFor, NgIf, DatePipe, NgClass, RouterLink,
     MatButtonToggleModule, MatChipsModule, MatCardModule, MatCheckboxModule, MatTableModule, MatIconModule,
     NgChartsModule
   ],
@@ -57,6 +57,7 @@ export class DashboardComponent {
   private demoSvc = inject(DemoStateService);
   private statsApi = inject(StatsService);
   private pastApi = inject(PastBetsService);
+  private destroyRef = inject(DestroyRef);
 
   isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
   demo = this.demoSvc.demo;
@@ -66,6 +67,23 @@ export class DashboardComponent {
 
   private stats = signal<StatRow[] | null>(null);
   private bets  = signal<PastBet[] | null>(null);
+
+  // Prevent double-submits while grading
+  grading = new Set<string>();
+
+  async ngOnInit() {
+    if (!this.isBrowser) return;
+    this.statsApi.fetch()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ next: rows => this.stats.set(rows) });
+    this.reloadBets();
+  }
+
+  private reloadBets() {
+    this.pastApi.list()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ next: rows => this.bets.set(rows) });
+  }
 
   summaries = computed<CardVM[]>(() => {
     const rows = this.stats() ?? [];
@@ -142,34 +160,36 @@ export class DashboardComponent {
     });
   }
 
-  trackModel = (_: number, m: any) => m.id as string;
-
-  private destroyRef = inject(DestroyRef);
-
-  async ngOnInit() {
-    if (!this.isBrowser) return;
-    this.statsApi.fetch()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({ next: rows => this.stats.set(rows) });
-
-    this.reloadBets();
-  }
-
-  private reloadBets() {
-    this.pastApi.list()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({ next: rows => this.bets.set(rows) });
-  }
-
-  private grading = new Set<string>();
-  grade(row: RecentRow, outcome: ''|'win'|'loss'|'push') {
-    if (this.grading.has(row.id)) return;
+  grade(row: RecentRow, outcome: '' | 'win' | 'loss' | 'push') {
+    if (!row?.id || this.grading.has(row.id)) return;
     this.grading.add(row.id);
     this.pastApi.setResult(row.id, outcome).subscribe({
       next: () => this.reloadBets(),
+      error: () => {/* optionally toast */},
       complete: () => this.grading.delete(row.id),
-      error: () => this.grading.delete(row.id),
     });
   }
 
+  // ----- UI helpers for Result column -----
+  resultClass(row: RecentRow): string {
+    switch (row.result) {
+      case 'win':  return 'res res-win';
+      case 'loss': return 'res res-loss';
+      case 'push': return 'res res-push';
+      default:     return 'res res-none';
+    }
+  }
+
+  formatUnits(row: RecentRow): string {
+    if (row.result === 'win' || row.result === 'loss') {
+      const u = row.resultUnits ?? 0;
+      const sign = u > 0 ? '+' : (u < 0 ? '' : '+');
+      return `${sign}${u.toFixed(2)}u`;
+    }
+    if (row.result === 'push') return '0.00u';
+    return '—';
+  }
+
+  // TrackBy
+  trackModel = (_: number, m: any) => m.id as string;
 }
