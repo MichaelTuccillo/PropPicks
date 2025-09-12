@@ -12,10 +12,12 @@ func handleModelStats(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	userKey := userKeyFromRequest(w, r)
-
+	userKey := userKeyFromRequest(r)
+	if userKey == "" {
+		errorJSON(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	if DB == nil {
-		// no DB -> empty list
 		writeJSON(w, http.StatusOK, map[string]any{"stats": []any{}})
 		return
 	}
@@ -28,11 +30,11 @@ func handleModelStats(w http.ResponseWriter, r *http.Request) {
 		Losses int     `json:"losses"`
 		Pushes int     `json:"pushes"`
 		Units  float64 `json:"units"`
-		ROIPct float64 `json:"roiPct"`
+		RoiPct float64 `json:"roiPct"`
 	}
 
 	var out []row
-	if err := DB.Table((UserModelStat{}).TableName()).
+	if err := DB.Table("user_model_stats").
 		Select("model, sport, bets, wins, losses, pushes, units, roi_pct as roi_pct").
 		Where("user_key = ?", userKey).
 		Order("model asc, sport asc").

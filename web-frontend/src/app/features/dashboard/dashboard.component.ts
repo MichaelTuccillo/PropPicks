@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, DestroyRef } from '@angular/core';
 import { NgFor, NgIf, DatePipe, DecimalPipe, isPlatformBrowser } from '@angular/common';
 import { PLATFORM_ID } from '@angular/core';
 import { RouterLink } from '@angular/router';
@@ -18,6 +18,7 @@ import { DemoStateService } from '../../shared/demo-state.service';
 import { Sport } from '../../shared/types';
 import { StatsService, StatRow } from '../../shared/stats.service';
 import { PastBetsService, PastBet } from '../../shared/past-bets.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 type RecentRow = {
   id: string;
@@ -65,16 +66,6 @@ export class DashboardComponent {
 
   private stats = signal<StatRow[] | null>(null);
   private bets  = signal<PastBet[] | null>(null);
-
-  async ngOnInit() {
-    if (!this.isBrowser) return; // avoid SSR cookie issues
-    this.statsApi.fetch().subscribe({ next: rows => this.stats.set(rows) });
-    this.reloadBets();
-  }
-
-  private reloadBets() {
-    this.pastApi.list().subscribe({ next: rows => this.bets.set(rows) });
-  }
 
   summaries = computed<CardVM[]>(() => {
     const rows = this.stats() ?? [];
@@ -151,12 +142,34 @@ export class DashboardComponent {
     });
   }
 
-  grade(row: RecentRow, outcome: '' | 'win' | 'loss' | 'push') {
+  trackModel = (_: number, m: any) => m.id as string;
+
+  private destroyRef = inject(DestroyRef);
+
+  async ngOnInit() {
+    if (!this.isBrowser) return;
+    this.statsApi.fetch()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ next: rows => this.stats.set(rows) });
+
+    this.reloadBets();
+  }
+
+  private reloadBets() {
+    this.pastApi.list()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ next: rows => this.bets.set(rows) });
+  }
+
+  private grading = new Set<string>();
+  grade(row: RecentRow, outcome: ''|'win'|'loss'|'push') {
+    if (this.grading.has(row.id)) return;
+    this.grading.add(row.id);
     this.pastApi.setResult(row.id, outcome).subscribe({
       next: () => this.reloadBets(),
-      error: () => {/* optionally toast */}
+      complete: () => this.grading.delete(row.id),
+      error: () => this.grading.delete(row.id),
     });
   }
 
-  trackModel = (_: number, m: any) => m.id as string;
 }

@@ -29,16 +29,16 @@ type PastBet struct {
 
 type PastBetRecord struct {
 	ID          string    `gorm:"primaryKey;type:text"`
-	UserKey     string    `gorm:"index;type:text;not null"`
+	UserKey     string    `gorm:"index:idx_past_user_date_created,priority:1;type:text;not null"`
 	Type        string    `gorm:"type:text;not null"` // Single | SGP | SGP+
-	Date        time.Time `gorm:"type:timestamptz;not null"`
+	Date        time.Time `gorm:"index:idx_past_user_date_created,priority:2;type:timestamptz;not null"`
 	Model       string    `gorm:"type:text;not null"`
 	Sport       string    `gorm:"type:text;not null"`
 	Event       string    `gorm:"type:text;not null"`
 	Odds        string    `gorm:"type:text;not null"`
-	Result      *string   `gorm:"type:text"` // nullable
+	Result      *string   `gorm:"type:text"`
 	ResultUnits *float64
-	CreatedAt   time.Time `gorm:"autoCreateTime"`
+	CreatedAt   time.Time `gorm:"index:idx_past_user_date_created,priority:3;autoCreateTime"`
 	UpdatedAt   time.Time `gorm:"autoUpdateTime"`
 }
 
@@ -97,7 +97,11 @@ func mustParse(iso string) time.Time {
 
 // GET/POST /api/past-bets
 func handlePastBets(w http.ResponseWriter, r *http.Request) {
-	userKey := userKeyFromRequest(r) // your existing helper to read authed user key
+	userKey := userKeyFromRequest(r)
+	if userKey == "" {
+		errorJSON(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 
 	switch r.Method {
 	case http.MethodGet:
@@ -105,7 +109,7 @@ func handlePastBets(w http.ResponseWriter, r *http.Request) {
 			var recs []PastBetRecord
 			if err := DB.Where("user_key = ?", userKey).
 				Order("date DESC, created_at DESC").
-				Limit(15). // return newest 15 explicitly
+				Limit(15).
 				Find(&recs).Error; err != nil {
 				errorJSON(w, http.StatusInternalServerError, "db error")
 				return
@@ -198,7 +202,22 @@ func handlePastBetResult(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
+
 	userKey := userKeyFromRequest(r)
+	if userKey == "" {
+		errorJSON(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	// Normalize/validate the result value; accept any casing
+	res := strings.ToLower(strings.TrimSpace(p.Result))
+	switch res {
+	case "win", "loss", "push", "":
+		// ok
+	default:
+		// Unknown token -> clear the result
+		res = ""
+	}
 
 	if DB != nil {
 		var rec PastBetRecord
@@ -210,7 +229,8 @@ func handlePastBetResult(w http.ResponseWriter, r *http.Request) {
 			errorJSON(w, http.StatusInternalServerError, "db error")
 			return
 		}
-		// compute units delta
+
+		// compute units delta vs previous
 		prev := ""
 		if rec.Result != nil {
 			prev = *rec.Result
@@ -219,14 +239,14 @@ func handlePastBetResult(w http.ResponseWriter, r *http.Request) {
 		if rec.ResultUnits != nil {
 			prevUnits = *rec.ResultUnits
 		}
-		newUnits := unitsForOutcome(rec.Odds, p.Result, 1.0)
+		newUnits := unitsForOutcome(rec.Odds, res, 1.0)
 
 		// update record
-		if p.Result == "" {
+		if res == "" {
 			rec.Result = nil
 			rec.ResultUnits = nil
 		} else {
-			rec.Result = &p.Result
+			rec.Result = &res
 			rec.ResultUnits = &newUnits
 		}
 		if err := DB.Save(&rec).Error; err != nil {
@@ -234,16 +254,18 @@ func handlePastBetResult(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// update stats row (ALL-TIME)
-		if err := upsertUserModelStat(DB, userKey, rec.Model, rec.Sport, prev, p.Result, prevUnits, newUnits); err != nil {
+		// update aggregate stats
+		if err := upsertUserModelStat(DB, userKey, rec.Model, rec.Sport, prev, res, prevUnits, newUnits); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "stats update error")
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+
+		// respond with the updated row
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "bet": toPublic(rec)})
 		return
 	}
 
-	// in-memory fallback: no-op or implement similar map update
+	// in-memory fallback
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -264,52 +286,6 @@ func trimPastBetsGorm(db *gorm.DB, userKey string, keep int) error {
 	}
 	return db.Where("user_key = ? AND id NOT IN ?", userKey, ids).
 		Delete(&PastBetRecord{}).Error
-}
-
-func upsertUserModelStat(db *gorm.DB, userKey, model, sport, prev, next string, prevUnits, nextUnits float64) error {
-	var s UserModelStat
-	err := db.Where(&UserModelStat{UserKey: userKey, Model: model, Sport: sport}).First(&s).Error
-	if err == gorm.ErrRecordNotFound {
-		s = UserModelStat{UserKey: userKey, Model: model, Sport: sport}
-	}
-	if next != "" && prev == "" {
-		s.Bets += 1
-	}
-	if prev == "" && next == "" {
-		// nothing
-	} else if prev == "" && next != "" {
-		switch next {
-		case "win":
-			s.Wins += 1
-		case "loss":
-			s.Losses += 1
-		case "push":
-			s.Pushes += 1
-		}
-	} else if prev != next {
-		switch prev {
-		case "win":
-			s.Wins -= 1
-		case "loss":
-			s.Losses -= 1
-		case "push":
-			s.Pushes -= 1
-		}
-		switch next {
-		case "win":
-			s.Wins += 1
-		case "loss":
-			s.Losses += 1
-		case "push":
-			s.Pushes += 1
-		}
-	}
-	// units delta
-	s.Units += (nextUnits - prevUnits)
-	if s.Bets > 0 {
-		s.RoiPct = (s.Units / float64(s.Bets)) * 100.0
-	}
-	return db.Save(&s).Error
 }
 
 /* ===================== Odds helpers ====================== */

@@ -1,6 +1,5 @@
 package main
 
-// add at top of auth.go
 import (
 	"encoding/json"
 	"net/http"
@@ -11,8 +10,15 @@ import (
 	"gorm.io/gorm"
 )
 
+/* ---------- DTOs ---------- */
 
-// --------- Helpers (cookie) ---------
+type userDTO struct {
+	ID          string `json:"id"`
+	Email       string `json:"email"`
+	DisplayName string `json:"displayName"`
+}
+
+/* ---------- Cookie helpers (relies on cookieName/cookieSecure from auth_support.go) ---------- */
 
 func setAuthCookie(w http.ResponseWriter, token string) {
 	c := &http.Cookie{
@@ -22,7 +28,9 @@ func setAuthCookie(w http.ResponseWriter, token string) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   cookieSecure,
-		Expires:  time.Now().Add(30 * 24 * time.Hour),
+		// 30 days:
+		Expires: time.Now().Add(30 * 24 * time.Hour),
+		MaxAge:  int((30 * 24 * time.Hour).Seconds()),
 	}
 	http.SetCookie(w, c)
 }
@@ -35,54 +43,93 @@ func clearAuthCookie(w http.ResponseWriter) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   cookieSecure,
+		Expires:  time.Unix(0, 0),
 		MaxAge:   -1,
 	}
 	http.SetCookie(w, c)
 }
 
-// --------- DTOs ---------
+/* ---------- Utils ---------- */
 
-type authReq struct {
-	Email       string `json:"email"`
-	Password    string `json:"password"`
-	DisplayName string `json:"displayName"` // optional
+func decodeJSON(r *http.Request, v any) error {
+	defer r.Body.Close()
+	return json.NewDecoder(r.Body).Decode(v)
 }
 
-type userDTO struct {
-	ID          string `json:"id"`
-	Email       string `json:"email"`
-	DisplayName string `json:"displayName"`
+func toDTO(u User) userDTO {
+	return userDTO{ID: u.ID, Email: u.Email, DisplayName: u.DisplayName}
 }
 
-// --------- Handlers ---------
+func findUserByEmail(db *gorm.DB, email string) (User, error) {
+	var u User
+	err := db.Where("LOWER(email) = ?", strings.ToLower(email)).First(&u).Error
+	return u, err
+}
 
-func SignUpHandler(w http.ResponseWriter, r *http.Request) {
-	var in authReq
+func firstNonEmpty(ss ...string) string {
+	for _, s := range ss {
+		if strings.TrimSpace(s) != "" {
+			return strings.TrimSpace(s)
+		}
+	}
+	return ""
+}
+
+/* ---------- Handlers ---------- */
+
+// POST /api/auth/register  { email, password, displayName? }  // also accepts display_name
+func handleAuthRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if DB == nil {
+		errorJSON(w, http.StatusInternalServerError, "db not initialized")
+		return
+	}
+
+	var in struct {
+		Email         string `json:"email"`
+		Password      string `json:"password"`
+		DisplayName   string `json:"displayName"`   // camelCase
+		DisplayNameAlt string `json:"display_name"` // snake_case (fallback)
+	}
 	if err := decodeJSON(r, &in); err != nil {
-		errorJSON(w, http.StatusBadRequest, "invalid json")
+		errorJSON(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
 	in.Email = strings.TrimSpace(strings.ToLower(in.Email))
-	if in.Email == "" || in.Password == "" {
+	if in.Email == "" || strings.TrimSpace(in.Password) == "" {
 		errorJSON(w, http.StatusBadRequest, "email and password required")
 		return
 	}
 
-	// Unique email?
-	var count int64
-	if err := DB.Model(&User{}).Where("email = ?", in.Email).Count(&count).Error; err != nil {
-		errorJSON(w, http.StatusInternalServerError, "db error")
-		return
+	// derive a sane display name
+	disp := firstNonEmpty(in.DisplayName, in.DisplayNameAlt)
+	if disp == "" {
+		if at := strings.IndexByte(in.Email, '@'); at > 0 {
+			disp = in.Email[:at]
+		} else {
+			disp = in.Email
+		}
 	}
-	if count > 0 {
+
+	// ensure unique email
+	if _, err := findUserByEmail(DB, in.Email); err == nil {
 		errorJSON(w, http.StatusConflict, "email already in use")
 		return
 	}
 
-	hash, _ := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "hash error")
+		return
+	}
+
 	u := User{
+		ID:           newID(),
 		Email:        in.Email,
-		DisplayName:  strings.TrimSpace(in.DisplayName),
+		DisplayName:  disp,
 		PasswordHash: string(hash),
 	}
 	if err := DB.Create(&u).Error; err != nil {
@@ -90,6 +137,7 @@ func SignUpHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// issue cookie
 	tok, err := signToken(u.ID, 24*30) // 30 days
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "token error")
@@ -99,26 +147,38 @@ func SignUpHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toDTO(u))
 }
 
-func SignInHandler(w http.ResponseWriter, r *http.Request) {
-	var in authReq
+// POST /api/auth/sign-in  { email, password }
+func handleAuthSignIn(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if DB == nil {
+		errorJSON(w, http.StatusInternalServerError, "db not initialized")
+		return
+	}
+
+	var in struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
 	if err := decodeJSON(r, &in); err != nil {
-		errorJSON(w, http.StatusBadRequest, "invalid json")
+		errorJSON(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
 	in.Email = strings.TrimSpace(strings.ToLower(in.Email))
-
-	var u User
-	err := DB.Where("email = ?", in.Email).First(&u).Error
-	if err == gorm.ErrRecordNotFound {
-		errorJSON(w, http.StatusUnauthorized, "invalid email or password")
-		return
-	} else if err != nil {
-		errorJSON(w, http.StatusInternalServerError, "db error")
+	if in.Email == "" || strings.TrimSpace(in.Password) == "" {
+		errorJSON(w, http.StatusBadRequest, "email and password required")
 		return
 	}
 
-	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(in.Password)) != nil {
-		errorJSON(w, http.StatusUnauthorized, "invalid email or password")
+	u, err := findUserByEmail(DB, in.Email)
+	if err != nil {
+		errorJSON(w, http.StatusUnauthorized, "invalid credentials")
+		return
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(in.Password)); err != nil {
+		errorJSON(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
 
@@ -131,48 +191,31 @@ func SignInHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toDTO(u))
 }
 
-func SignOutHandler(w http.ResponseWriter, r *http.Request) {
-	clearAuthCookie(w)
-	writeJSON(w, http.StatusOK, map[string]string{"status": "signed_out"})
-}
-
-func MeHandler(w http.ResponseWriter, r *http.Request) {
-	c, err := r.Cookie(cookieName)
-	if err != nil || c.Value == "" {
-		errorJSON(w, http.StatusUnauthorized, "no session")
+// GET /api/auth/me
+func handleAuthMe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	claims, err := parseToken(c.Value)
-	if err != nil {
-		errorJSON(w, http.StatusUnauthorized, "invalid session")
+	uid := userKeyFromRequest(r)
+	if uid == "" || DB == nil {
+		errorJSON(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-
 	var u User
-	if err := DB.First(&u, "id = ?", claims.UserID).Error; err != nil {
+	if err := DB.First(&u, "id = ?", uid).Error; err != nil {
 		errorJSON(w, http.StatusUnauthorized, "user not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, toDTO(u))
 }
 
-// --------- utils ---------
-
-func decodeJSON(r *http.Request, v any) error {
-	defer r.Body.Close()
-	return jsonNewDecoder(r).Decode(v)
-}
-
-// minimal wrapper so we can keep imports tidy here
-// (kept here to avoid adding another file just for a single line)
-func jsonNewDecoder(r *http.Request) *jsonDecoder { return &jsonDecoder{r} }
-
-type jsonDecoder struct{ r *http.Request }
-
-func (d *jsonDecoder) Decode(v any) error {
-	return json.NewDecoder(d.r.Body).Decode(v)
-}
-
-func toDTO(u User) userDTO {
-	return userDTO{ID: u.ID, Email: u.Email, DisplayName: u.DisplayName}
+// POST /api/auth/sign-out
+func handleAuthSignOut(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	clearAuthCookie(w)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

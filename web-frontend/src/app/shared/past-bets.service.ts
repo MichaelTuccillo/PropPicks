@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { environment } from '../../environments/environment.development';
-import { Observable, map } from 'rxjs';
+import { Observable, map, of, takeUntil } from 'rxjs';
 import { AuthService } from './auth.service';
 
 export type PastBet = {
@@ -24,22 +24,32 @@ export class PastBetsService {
   private auth = inject(AuthService);
   private base = `${environment.apiBase}/past-bets`;
 
-  private headers(): HttpHeaders | undefined {
-    const u = this.auth.user();
-    return u?.id ? new HttpHeaders({ 'X-PP-User': u.id }) : undefined;
-  }
+  private isAuthed() { return !!this.auth.user(); }
 
   list(): Observable<PastBet[]> {
+    if (!this.isAuthed()) return of([]);
     return this.http
-      .get<{ bets: PastBet[] }>(this.base, { withCredentials: true, headers: this.headers() })
-      .pipe(map(r => r?.bets ?? []));
+      .get<{ bets: PastBet[] }>(this.base, { withCredentials: true })
+      .pipe(
+        takeUntil(this.auth.logout$),
+        map(r => r?.bets ?? [])
+      );
   }
 
   save(bet: SavePastBetPayload): Observable<{ ok: boolean }> {
-    return this.http.post<{ ok: boolean }>(this.base, bet, { withCredentials: true, headers: this.headers() });
+    if (!this.isAuthed()) return of({ ok: false });
+    return this.http.post<{ ok: boolean }>(this.base, bet, { withCredentials: true })
+      .pipe(takeUntil(this.auth.logout$));
   }
 
+  /** Grade a bet. Accepts 'win'|'loss'|'push' in any casing; normalizes to lower-case. */
   setResult(id: string, result: 'win' | 'loss' | 'push' | ''): Observable<{ ok: boolean }> {
-    return this.http.post<{ ok: boolean }>(`${this.base}/result`, { id, result }, { withCredentials: true, headers: this.headers() });
+    if (!this.isAuthed()) return of({ ok: false });
+    const normalized = (result || '').toString().trim().toLowerCase() as 'win'|'loss'|'push'|'';
+    return this.http.post<{ ok: boolean }>(
+      `${this.base}/result`,
+      { id, result: normalized },
+      { withCredentials: true }
+    ).pipe(takeUntil(this.auth.logout$));
   }
 }
