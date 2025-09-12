@@ -24,7 +24,7 @@
     </mat-button-toggle-group>
   </div>
 
-  <!-- Model cards (L14 rows removed) -->
+  <!-- Model cards -->
   <div class="grid">
     <mat-card *ngFor="let m of summaries()">
       <div class="card-head">
@@ -50,7 +50,7 @@
     </mat-card>
   </div>
 
-  <!-- Cumulative % Gain (chart left as-is) -->
+  <!-- Chart (demo-only series) -->
   <div class="section">
     <h3>Cumulative % Gain (L14D)</h3>
     <div class="chart-wrap" *ngIf="isBrowser">
@@ -98,17 +98,33 @@
         <td mat-cell *matCellDef="let r">{{ r.combinedOdds }}</td>
       </ng-container>
 
+      <!-- New: grade controls -->
+      <ng-container matColumnDef="grade">
+        <th mat-header-cell *matHeaderCellDef>Set Result</th>
+        <td mat-cell *matCellDef="let r">
+          <mat-button-toggle-group
+            [value]="r.result || ''"
+            (valueChange)="grade(r, $event)"
+            class="mini-toggles">
+            <mat-button-toggle value="win">Win</mat-button-toggle>
+            <mat-button-toggle value="loss">Loss</mat-button-toggle>
+            <mat-button-toggle value="push">Push</mat-button-toggle>
+            <mat-button-toggle value="">Clear</mat-button-toggle>
+          </mat-button-toggle-group>
+        </td>
+      </ng-container>
+
       <ng-container matColumnDef="result">
         <th mat-header-cell *matHeaderCellDef>Result (u)</th>
         <td mat-cell *matCellDef="let r">
-          <span [class.pos]="r.resultUnits >= 0" [class.neg]="r.resultUnits < 0">
-            {{ r.resultUnits | number:'1.2-2' }}
+          <span [class.pos]="(r.resultUnits ?? 0) >= 0" [class.neg]="(r.resultUnits ?? 0) < 0">
+            {{ (r.resultUnits ?? 0) | number:'1.2-2' }}
           </span>
         </td>
       </ng-container>
 
-      <tr mat-header-row *matHeaderRowDef="['date','model','sport','event','type','odds','result']"></tr>
-      <tr mat-row *matRowDef="let row; columns: ['date','model','sport','event','type','odds','result'];"></tr>
+      <tr mat-header-row *matHeaderRowDef="['date','model','sport','event','type','odds','grade','result']"></tr>
+      <tr mat-row *matRowDef="let row; columns: ['date','model','sport','event','type','odds','grade','result'];"></tr>
     </table>
   </div>
 </div>

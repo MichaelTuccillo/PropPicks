@@ -95,13 +95,6 @@ func handleGenerateSlip(w http.ResponseWriter, r *http.Request) {
 
 	prompt := buildPromptFromFilters(req.Filters)
 
-	// ----- PRINT PROMPT (debug) -----
-	log.Println("----- /api/generate-slip PROMPT -----")
-	log.Printf("Filters: %+v\n", req.Filters)
-	log.Println("----- BEGIN PROMPT -----")
-	log.Println(prompt)
-	log.Println("------ END PROMPT ------")
-
 	// Env/config
 	key := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
 	if key == "" {
@@ -147,11 +140,6 @@ func handleGenerateSlip(w http.ResponseWriter, r *http.Request) {
 
 	slurp, _ := io.ReadAll(resp.Body)
 
-	// ----- PRINT RAW OPENAI BODY -----
-	log.Println("----- OPENAI RAW HTTP BODY -----")
-	log.Println(string(slurp))
-	log.Println("----- END RAW BODY -----")
-
 	if resp.StatusCode/100 != 2 {
 		log.Printf("[generate-slip] openai non-2xx: status=%d", resp.StatusCode)
 		errorJSON(w, http.StatusBadGateway, strings.TrimSpace(string(slurp)))
@@ -171,11 +159,6 @@ func handleGenerateSlip(w http.ResponseWriter, r *http.Request) {
 
 	content := strings.TrimSpace(ai.Choices[0].Message.Content)
 
-	// ----- PRINT CHOICE CONTENT -----
-	log.Println("----- OPENAI CHOICE CONTENT -----")
-	log.Println(content)
-	log.Println("----- END CHOICE CONTENT -----")
-
 	// Parse model JSON -> betSlip
 	var slip betSlip
 	if err := json.Unmarshal([]byte(content), &slip); err != nil {
@@ -189,13 +172,6 @@ func handleGenerateSlip(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		slip.CreatedAt = time.Now().UTC()
-	}
-
-	// ----- PRINT PARSED SLIP (WHAT WE RETURN) -----
-	if bs, err := json.MarshalIndent(slip, "", "  "); err == nil {
-		log.Println("----- PARSED SLIP (SENT TO CLIENT) -----")
-		log.Println(string(bs))
-		log.Println("----- END PARSED SLIP -----")
 	}
 
 	writeJSON(w, http.StatusOK, slip)
