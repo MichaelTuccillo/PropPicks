@@ -12,6 +12,76 @@
       </mat-form-field>
     </div>
 
+    <!-- Games (filterable range within next 7 days) -->
+    <div class="row games-section" *ngIf="sport()">
+      <div class="full">
+        <div class="models-head" style="align-items:center;">
+          <h3 class="sub">Games</h3>
+
+          <div class="actions day-filters" style="gap:16px; align-items:center;">
+            <mat-form-field appearance="outline" class="day-filter">
+              <mat-label>From</mat-label>
+              <mat-select [value]="startOffset()" (valueChange)="setStartOffset($event)">
+                <mat-option *ngFor="let opt of dayChoices(); trackBy: trackChoice" [value]="opt.value">
+                  {{ opt.label }}
+                </mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="day-filter">
+              <mat-label>To</mat-label>
+              <mat-select [value]="endOffset()" (valueChange)="setEndOffset($event)">
+                <mat-option *ngFor="let opt of dayChoices(); trackBy: trackChoice"
+                            [value]="opt.value" [disabled]="opt.value < startOffset()">
+                  {{ opt.label }}
+                </mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <a (click)="loadGames()">Refresh</a>
+            <a (click)="selectAllVisible()" *ngIf="groupedGames()?.length">Select all</a>
+            <a (click)="clearVisible()" *ngIf="groupedGames()?.length">Clear</a>
+          </div>
+        </div>
+
+        <div *ngIf="gamesLoading()" class="muted">Loading games…</div>
+        <div *ngIf="gamesError()" class="muted" style="color:#f88;">{{ gamesError() }}</div>
+
+        <ng-container *ngIf="!gamesLoading() && groupedGames()?.length">
+          <div class="game-day" *ngFor="let day of groupedGames(); trackBy: trackDay">
+            <div class="day-head">
+              <div class="day-title">{{ day.label }}</div>
+              <div class="day-actions">
+                <a (click)="selectDay(day.dateKey)">Select day</a>
+                <a (click)="clearDay(day.dateKey)">Clear day</a>
+              </div>
+            </div>
+
+            <div class="game-grid">
+              <label class="game-row" *ngFor="let g of day.items; trackBy: trackGame">
+                <mat-checkbox
+                  [checked]="selectedGameIds().has(g.id)"
+                  (change)="toggleGame(g.id, $event.checked)">
+                </mat-checkbox>
+
+                <div class="teams">
+                  <span class="away">{{ g.away }}</span>
+                  <span class="at">@</span>
+                  <span class="home">{{ g.home }}</span>
+                </div>
+
+                <div class="time">{{ formatTime(g.start) }}</div>
+              </label>
+            </div>
+          </div>
+        </ng-container>
+
+        <div class="muted" *ngIf="!gamesLoading() && !groupedGames()?.length">
+          No games in the selected window for {{ sport() }}.
+        </div>
+      </div>
+    </div>
+
     <!-- Bet type -->
     <div class="row">
       <div class="full">
@@ -24,23 +94,18 @@
       </div>
     </div>
 
-    <!-- Legs + Slips -->
+    <!-- Legs only (Slips removed) -->
     <div class="row">
-      <mat-form-field appearance="outline" class="half">
+      <mat-form-field appearance="outline" class="full">
         <mat-label>Legs</mat-label>
         <input matInput type="number"
                [disabled]="mode()==='Single'"
                [value]="mode()==='Single' ? 1 : legs()"
                (input)="onLegsInput($event)">
       </mat-form-field>
-
-      <mat-form-field appearance="outline" class="half">
-        <mat-label># Slips</mat-label>
-        <input matInput type="number" [value]="slips()" (input)="onSlipsInput($event)">
-      </mat-form-field>
     </div>
 
-    <!-- Presets (inline + compact) -->
+    <!-- Presets -->
     <div class="row presets-inline">
       <span class="muted">Presets:</span>
       <button mat-stroked-button class="preset-btn" (click)="setPreset('safe')">Safe</button>
@@ -52,69 +117,22 @@
     <div class="row">
       <mat-form-field appearance="outline" class="half">
         <mat-label>Min odds (American)</mat-label>
-        <input
-          matInput
-          type="number"
-          [attr.step]="5"
-          [value]="minOdds()"
-          (input)="onOddsInput('min', $event)"
-        />
-        <mat-error *ngIf="oddsInvalid('min')">
-          Odds cannot be between −100 and +100.
-        </mat-error>
+        <input matInput type="number" [attr.step]="5" [value]="minOdds()" (input)="onOddsInput('min', $event)" />
+        <mat-error *ngIf="oddsInvalid('min')">Odds cannot be between −100 and +100.</mat-error>
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="half">
         <mat-label>Max odds (American)</mat-label>
-        <input
-          matInput
-          type="number"
-          [attr.step]="5"
-          [value]="maxOdds()"
-          (input)="onOddsInput('max', $event)"
-        />
-        <mat-error *ngIf="oddsInvalid('max')">
-          Odds cannot be between −100 and +100.
-        </mat-error>
+        <input matInput type="number" [attr.step]="5" [value]="maxOdds()" (input)="onOddsInput('max', $event)" />
+        <mat-error *ngIf="oddsInvalid('max')">Odds cannot be between −100 and +100.</mat-error>
       </mat-form-field>
-    </div>
-
-    <!-- NEW: Bet boost -->
-    <div class="row">
-      <div class="full" style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-        <mat-checkbox
-          [checked]="boostEnabled()"
-          (change)="toggleBoost($event.checked)">
-          Bet boost
-        </mat-checkbox>
-
-        <mat-form-field
-          *ngIf="boostEnabled()"
-          appearance="outline"
-          class="half"
-          style="max-width:260px;">
-          <mat-label>Boost %</mat-label>
-          <input
-            matInput
-            type="number"
-            min="0"
-            max="100"
-            step="1"
-            [value]="boostPct() ?? ''"
-            (input)="onBoostInput($event)" />
-          <span matSuffix>%</span>
-          <mat-error *ngIf="boostInvalid()">
-            Enter a value between 0 and 100.
-          </mat-error>
-        </mat-form-field>
-      </div>
     </div>
 
     <!-- Models -->
     <div class="row models-head">
       <h3 class="sub">Models</h3>
       <div class="actions">
-        <span class="muted">(choose one)</span>
+        <a (click)="selectAllModels()">Select all</a>
         <a (click)="clearModels()">Clear</a>
       </div>
     </div>
@@ -123,7 +141,7 @@
       <label class="check" *ngFor="let m of models(); trackBy: trackModel">
         <mat-checkbox
           [checked]="selectedIds().has(m.id)"
-          (change)="clearModels(); toggleModel(m.id, true)">
+          (change)="toggleModel(m.id, $event.checked)">
         </mat-checkbox>
         <span>{{ m.name }}</span>
       </label>
@@ -131,15 +149,10 @@
 
     <div class="cta-row">
       <div class="hint muted" *ngIf="!canGenerate()">
-        Select exactly one model and enter valid odds (no values between −100 and +100).
+        Select exactly one model, pick <strong>at least one game</strong>, and enter valid odds (no values between −100 and +100).
       </div>
 
-      <button
-        mat-stroked-button
-        class="clear-btn small"
-        (click)="clearResults()"
-        *ngIf="slipsOut()"
-      >
+      <button mat-stroked-button class="clear-btn small" (click)="clearResults()" *ngIf="slipsOut()">
         <mat-icon>clear</mat-icon>
         Clear
       </button>
@@ -149,8 +162,7 @@
         color="primary"
         class="generate-btn small"
         [disabled]="aiLoading() || !canGenerate()"
-        (click)="generateAiSlip()"
-      >
+        (click)="generateAiSlip()">
         <mat-icon>auto_awesome</mat-icon>
         Generate bets
       </button>
@@ -159,7 +171,7 @@
     </div>
   </mat-card>
 
-  <!-- Results appear below -->
+  <!-- (Optional) Mock generator results block left as-is -->
   <mat-card class="panel" *ngIf="slipsOut() as slips">
     <div class="results">
       <h3 class="sub">Generated slips</h3>
@@ -178,6 +190,7 @@
     </div>
   </mat-card>
 
+  <!-- AI result -->
   <mat-card class="panel" *ngIf="aiSlip() as s">
     <div class="results">
       <h3 class="sub">AI Bet Slip</h3>
@@ -192,8 +205,8 @@
             <strong>{{ l.market }}:</strong> {{ l.pick }}
             <span *ngIf="l.line || l.odds">
               ( <ng-container *ngIf="l.line">Line: {{ l.line }}</ng-container>
-                <ng-container *ngIf="l.line && l.odds"> • </ng-container>
-                <ng-container *ngIf="l.odds">Odds: {{ l.odds }}</ng-container> )
+              <ng-container *ngIf="l.line && l.odds"> • </ng-container>
+              <ng-container *ngIf="l.odds">Odds: {{ l.odds }}</ng-container> )
             </span>
             <div class="muted" *ngIf="l.notes">{{ l.notes }}</div>
           </li>
@@ -209,5 +222,4 @@
       </div>
     </div>
   </mat-card>
-
 </div>

@@ -64,6 +64,9 @@ func main() {
 		r.Get("/me", MeHandler)
 	})
 
+	r.Get("/api/games", handleListGames)
+
+
 	addr := ":" + getenvDefault("PORT", "8080")
 	srv := &http.Server{
 		Addr:              addr,

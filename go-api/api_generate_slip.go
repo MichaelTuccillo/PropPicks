@@ -27,6 +27,7 @@ type GenerateFilters struct {
 	MaxOdds  float64 `json:"maxOdds"`  // if >= +100, treat as overall payout upper bound
 	Model    string  `json:"model"`    // exactly one selected model
 	BoostPct float64 `json:"boostPct"` // e.g., 0, 30, 50 (percentage)
+	Games    []GameDTO `json:"games"`
 }
 
 /* ---------------- Model Output ---------------- */
@@ -203,6 +204,7 @@ func handleGenerateSlip(w http.ResponseWriter, r *http.Request) {
 /* ---------------- Prompt Builder (model-aware) ---------------- */
 
 func buildPromptFromFilters(f GenerateFilters) string {
+	
 	// Legs based on mode
 	legsWanted := 3
 	switch strings.ToLower(strings.TrimSpace(f.Mode)) {
@@ -231,6 +233,14 @@ func buildPromptFromFilters(f GenerateFilters) string {
 	sb.WriteString(fmt.Sprintf("Current time (America/Toronto): %s\n", now))
 	sb.WriteString("Only use markets for games that have NOT started as of the current time above. Do not use in-play or finished games.\n")
 	sb.WriteString("Populate \"event\" with the matchup plus local start date/time for the relevant game(s). For SGP+, list all games used separated by '; '.\n\n")
+
+	if len(f.Games) > 0 {
+		sb.WriteString("- Restrict all selections to these upcoming games:\n")
+		for _, g := range f.Games {
+			sb.WriteString(fmt.Sprintf("  • [%s] %s @ %s — starts %s (id=%s)\n",
+				g.Sport, g.Away, g.Home, g.Start, g.ID))
+		}
+	}
 
 	// JSON schema your UI expects (unchanged)
 	sb.WriteString("Return ONLY JSON with this schema:\n")
@@ -266,7 +276,7 @@ func promptForModel(model string, legsWanted int, sport string, minOdds, maxOdds
 		return fmt.Sprintf(
 			`You are the "Narrative / Correlated Story" model for the sport: %s.
 %s
-Build a coherent game-script slip with exactly %d leg(s).
+Build a coherent script slip with exactly %d leg(s).
 Base every leg on recent articles from Action Network, Covers, Oddshark, or Hero Sports (no sportsbook blogs).
 For each leg, include a short "notes" rationale that stitches the story; avoid redundant overlap (e.g., same-team ML + alt spread).
 Set "title": "Narrative SGP".
@@ -346,7 +356,7 @@ func sgpRules(mode string) string {
 	case "single":
 		return "- Bet type rules: SINGLE — one standalone selection (not a parlay). Ignore SGP/SGP+ constraints."
 	case "sgp":
-		return "- Bet type rules: SGP — ALL legs must be from the SAME game (a true same-game parlay)."
+		return "- Bet type rules: SGP — Legs can be from different games or the same game."
 	case "sgp+":
 		return "- Bet type rules: SGP+ — At least TWO legs must come from the SAME specific game; remaining legs may be from distinct games. Clearly indicate which legs share the same game."
 	default:

@@ -1,16 +1,17 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../environments/environment.development';
+import type { GameDTO } from './games.service';
 
 export interface AiFilters {
   sport: string;
   mode: 'Single' | 'SGP' | 'SGP+';
   legs: number;
-  slips: number;
   minOdds: number;
   maxOdds: number;
   model: string; // exactly one selected
   boostPct?: number;
+  games: GameDTO[]
 }
 
 export interface AiSlipLeg {

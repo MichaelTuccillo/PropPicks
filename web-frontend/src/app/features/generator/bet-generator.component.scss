@@ -73,3 +73,61 @@
   .half { flex-basis: 100%; }
   .right-actions { width: 100%; justify-content: flex-end; }
 }
+
+/* Games section */
+.games-section { margin-top: 8px; }
+
+.game-day { margin-top: 12px; }
+
+.day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  margin-bottom: 10px;
+}
+
+.day-title {
+  font-weight: 600;
+  opacity: .95;
+}
+
+.day-actions a { margin-left: 16px; cursor: pointer; }
+
+.game-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 10px 24px;
+}
+
+.game-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.game-row:hover { background: rgba(255,255,255,0.04); }
+
+.teams {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time {
+  margin-left: auto;
+  font-size: .95rem;
+  opacity: .8;
+  white-space: nowrap;
+}
+
+.day-filter {
+  width: 210px;
+  margin-right: 8px;
+}
