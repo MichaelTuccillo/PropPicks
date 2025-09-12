@@ -19,7 +19,9 @@ export class AuthService {
 
   async hydrate(): Promise<void> {
     try {
-      const me = await firstValueFrom(this.http.get<User>(`${this.base}/me`, { withCredentials: true }));
+      const me = await firstValueFrom(
+        this.http.get<User>(`${this.base}/me`, { withCredentials: true })
+      );
       this.user.set(me || null);
     } catch {
       this.user.set(null);

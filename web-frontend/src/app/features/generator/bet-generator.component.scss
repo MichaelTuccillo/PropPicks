@@ -131,3 +131,9 @@
   width: 210px;
   margin-right: 8px;
 }
+
+.bettype-inline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.legs-inline { width: 140px; }
+.edit-odds { margin-top: 12px; }
+.day-filters { display: flex; flex-wrap: wrap; }
+.day-filter  { width: 180px; margin-right: 8px; }

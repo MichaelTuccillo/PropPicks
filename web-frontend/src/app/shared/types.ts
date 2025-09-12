@@ -1,4 +1,4 @@
-export type Sport = 'All' | 'NFL' | 'NHL' | 'NBA' | 'MLB' | 'WNBA' | 'NCAAF' | 'ATP/WTA';
+export type Sport = 'All' | 'NFL' | 'NHL' | 'NBA' | 'MLB';
 
 export interface ModelSummary {
   id: string;

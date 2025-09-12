@@ -65,7 +65,9 @@ func main() {
 	})
 
 	r.Get("/api/games", handleListGames)
-
+	r.HandleFunc("/api/past-bets", handlePastBets)
+	r.HandleFunc("/api/past-bets/result", handlePastBetResult)
+	r.HandleFunc("/api/model-stats", handleModelStats)
 
 	addr := ":" + getenvDefault("PORT", "8080")
 	srv := &http.Server{

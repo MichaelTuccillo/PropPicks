@@ -12,7 +12,7 @@
       </mat-form-field>
     </div>
 
-    <!-- Games (filterable range within next 7 days) -->
+    <!-- Games (range within next 7 days) -->
     <div class="row games-section" *ngIf="sport()">
       <div class="full">
         <div class="models-head" style="align-items:center;">
@@ -82,27 +82,23 @@
       </div>
     </div>
 
-    <!-- Bet type -->
+    <!-- Bet type + inline Legs -->
     <div class="row">
       <div class="full">
         <label class="field-label">Bet type</label>
-        <mat-button-toggle-group [value]="mode()" (valueChange)="setMode($event)">
-          <mat-button-toggle value="Single">Single</mat-button-toggle>
-          <mat-button-toggle value="SGP">SGP</mat-button-toggle>
-          <mat-button-toggle value="SGP+">SGP+</mat-button-toggle>
-        </mat-button-toggle-group>
-      </div>
-    </div>
+        <div class="bettype-inline">
+          <mat-button-toggle-group [value]="mode()" (valueChange)="setMode($event)">
+            <mat-button-toggle value="Single">Single</mat-button-toggle>
+            <mat-button-toggle value="SGP">SGP</mat-button-toggle>
+            <mat-button-toggle value="SGP+">SGP+</mat-button-toggle>
+          </mat-button-toggle-group>
 
-    <!-- Legs only (Slips removed) -->
-    <div class="row">
-      <mat-form-field appearance="outline" class="full">
-        <mat-label>Legs</mat-label>
-        <input matInput type="number"
-               [disabled]="mode()==='Single'"
-               [value]="mode()==='Single' ? 1 : legs()"
-               (input)="onLegsInput($event)">
-      </mat-form-field>
+          <mat-form-field appearance="outline" class="legs-inline" *ngIf="mode()!=='Single'">
+            <mat-label>Legs</mat-label>
+            <input matInput type="number" [value]="legs()" (input)="onLegsInput($event)">
+          </mat-form-field>
+        </div>
+      </div>
     </div>
 
     <!-- Presets -->
@@ -190,32 +186,47 @@
     </div>
   </mat-card>
 
-  <!-- AI result -->
+  <!-- AI result with editable odds + Save/Discard -->
   <mat-card class="panel" *ngIf="aiSlip() as s">
     <div class="results">
       <h3 class="sub">AI Bet Slip</h3>
       <div class="slip">
         <div class="head">
           {{ s.title || 'Proposed Bet Slip' }}
-          <span *ngIf="s.combinedOdds"> — {{ s.combinedOdds }}</span>
         </div>
         <div class="muted" *ngIf="s.event">{{ s.event }}</div>
+
         <ul class="legs">
           <li *ngFor="let l of s.legs">
             <strong>{{ l.market }}:</strong> {{ l.pick }}
             <span *ngIf="l.line || l.odds">
-              ( <ng-container *ngIf="l.line">Line: {{ l.line }}</ng-container>
-              <ng-container *ngIf="l.line && l.odds"> • </ng-container>
-              <ng-container *ngIf="l.odds">Odds: {{ l.odds }}</ng-container> )
+              (<ng-container *ngIf="l.line">Line: {{ l.line }}</ng-container>
+               <ng-container *ngIf="l.line && l.odds"> • </ng-container>
+               <ng-container *ngIf="l.odds">Odds: {{ l.odds }}</ng-container>)
             </span>
             <div class="muted" *ngIf="l.notes">{{ l.notes }}</div>
           </li>
         </ul>
+
+        <!-- Editable odds -->
+        <div class="edit-odds">
+          <mat-form-field appearance="outline" class="full" *ngIf="mode()!=='Single'">
+            <mat-label>Total odds (American)</mat-label>
+            <input matInput type="text" [value]="editableOdds()" (input)="onEditableOddsInput($event)" placeholder="+700">
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full" *ngIf="mode()==='Single'">
+            <mat-label>Odds (American)</mat-label>
+            <input matInput type="text" [value]="editableOdds()" (input)="onEditableOddsInput($event)" placeholder="-115">
+          </mat-form-field>
+        </div>
+
         <div class="why" *ngIf="s.rationale">
           <div class="muted">Why:</div>
           <div>{{ s.rationale }}</div>
         </div>
       </div>
+
       <div class="right-actions" style="margin-top:8px;">
         <button mat-stroked-button color="warn" (click)="discardAiSlip()">Discard</button>
         <button mat-raised-button color="primary" (click)="saveAiSlip()">Save</button>

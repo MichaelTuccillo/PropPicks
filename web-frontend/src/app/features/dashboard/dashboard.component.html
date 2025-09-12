@@ -24,7 +24,7 @@
     </mat-button-toggle-group>
   </div>
 
-  <!-- Model cards -->
+  <!-- Model cards (L14 rows removed) -->
   <div class="grid">
     <mat-card *ngFor="let m of summaries()">
       <div class="card-head">
@@ -35,21 +35,22 @@
       </div>
 
       <div class="stats">
-        <div><span>L14 W/L</span><strong>{{ m.l14_wl }}</strong></div>
-        <div><span>L14 ROI</span><strong [class.pos]="m.l14_roi>=0" [class.neg]="m.l14_roi<0">{{ m.l14_roi }}%</strong></div>
         <div><span>All-time W/L</span><strong>{{ m.all_wl }}</strong></div>
-        <div><span>All-time ROI</span><strong [class.pos]="m.all_roi>=0" [class.neg]="m.all_roi<0">{{ m.all_roi }}%</strong></div>
+        <div>
+          <span>All-time ROI</span>
+          <strong [class.pos]="m.all_roi>=0" [class.neg]="m.all_roi<0">{{ m.all_roi }}%</strong>
+        </div>
       </div>
 
       <mat-checkbox
         [checked]="selectedIds().has(m.id)"
         (change)="toggleModel(m.id, $event.checked)">
-        Include in L14 chart
+        Include in chart
       </mat-checkbox>
     </mat-card>
   </div>
 
-  <!-- Cumulative % Gain (L14D) -->
+  <!-- Cumulative % Gain (chart left as-is) -->
   <div class="section">
     <h3>Cumulative % Gain (L14D)</h3>
     <div class="chart-wrap" *ngIf="isBrowser">
@@ -66,48 +67,48 @@
   <div class="section">
     <h3>Recent bets</h3>
 
-    <table mat-table [dataSource]="recent" class="mat-elevation-z1 bets-table">
-        <ng-container matColumnDef="date">
+    <table mat-table [dataSource]="recent()" class="mat-elevation-z1 bets-table">
+      <ng-container matColumnDef="date">
         <th mat-header-cell *matHeaderCellDef>Date</th>
         <td mat-cell *matCellDef="let r">{{ r.date | date:'MMM d, HH:mm' }}</td>
-        </ng-container>
+      </ng-container>
 
-        <ng-container matColumnDef="model">
+      <ng-container matColumnDef="model">
         <th mat-header-cell *matHeaderCellDef>Model</th>
         <td mat-cell *matCellDef="let r">{{ r.modelName }}</td>
-        </ng-container>
+      </ng-container>
 
-        <ng-container matColumnDef="sport">
+      <ng-container matColumnDef="sport">
         <th mat-header-cell *matHeaderCellDef>Sport</th>
         <td mat-cell *matCellDef="let r">{{ r.sport }}</td>
-        </ng-container>
+      </ng-container>
 
-        <ng-container matColumnDef="event">
+      <ng-container matColumnDef="event">
         <th mat-header-cell *matHeaderCellDef>Event</th>
         <td mat-cell *matCellDef="let r">{{ r.event }}</td>
-        </ng-container>
+      </ng-container>
 
-        <ng-container matColumnDef="type">
+      <ng-container matColumnDef="type">
         <th mat-header-cell *matHeaderCellDef>Type</th>
         <td mat-cell *matCellDef="let r">{{ r.betType }}</td>
-        </ng-container>
+      </ng-container>
 
-        <ng-container matColumnDef="odds">
+      <ng-container matColumnDef="odds">
         <th mat-header-cell *matHeaderCellDef>Odds</th>
         <td mat-cell *matCellDef="let r">{{ r.combinedOdds }}</td>
-        </ng-container>
+      </ng-container>
 
-        <ng-container matColumnDef="result">
+      <ng-container matColumnDef="result">
         <th mat-header-cell *matHeaderCellDef>Result (u)</th>
         <td mat-cell *matCellDef="let r">
-            <span [class.pos]="r.resultUnits >= 0" [class.neg]="r.resultUnits < 0">
+          <span [class.pos]="r.resultUnits >= 0" [class.neg]="r.resultUnits < 0">
             {{ r.resultUnits | number:'1.2-2' }}
-            </span>
+          </span>
         </td>
-        </ng-container>
+      </ng-container>
 
-        <tr mat-header-row *matHeaderRowDef="['date','model','sport','event','type','odds','result']"></tr>
-        <tr mat-row *matRowDef="let row; columns: ['date','model','sport','event','type','odds','result'];"></tr>
+      <tr mat-header-row *matHeaderRowDef="['date','model','sport','event','type','odds','result']"></tr>
+      <tr mat-row *matRowDef="let row; columns: ['date','model','sport','event','type','odds','result'];"></tr>
     </table>
   </div>
-
+</div>

@@ -3,7 +3,7 @@ import { BetRow, EquityPoint, ModelDetailStats, ModelSummary, Sport } from './ty
 
 @Injectable({ providedIn: 'root' })
 export class MockDataService {
-  sports: Sport[] = ['All', 'NFL', 'NHL', 'NBA', 'MLB', 'WNBA', 'NCAAF', 'ATP/WTA'];
+  sports: Sport[] = ['All', 'NFL', 'NHL', 'NBA', 'MLB'];
   models: ModelSummary[] = [
     { id:'narrative',   name:'Narrative',   l14_wl:'18–12', l14_roi: 12.4, all_wl:'210–180', all_roi: 8.2 },
     { id:'weird',       name:'Weird',       l14_wl:'15–15', l14_roi:  2.1, all_wl:'205–198', all_roi: 3.7 },
@@ -39,7 +39,7 @@ export class MockDataService {
   }
 
   getRecentBets(limit = 12): BetRow[] {
-    const sports: Sport[] = ['NFL', 'NHL', 'NBA', 'MLB','WNBA','NCAAF','ATP/WTA'];
+    const sports: Sport[] = ['NFL', 'NHL', 'NBA', 'MLB'];
     const models = this.models;
     const now = new Date();
     return Array.from({length: limit}).map((_,i) => {

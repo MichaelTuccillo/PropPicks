@@ -16,6 +16,7 @@ import { GeneratorService, GeneratorInput, Slip } from '../../shared/generator.s
 import { Sport } from '../../shared/types';
 import { AiSlipService, AiBetSlip, AiFilters } from '../../shared/ai-slip.service';
 import { GamesService, GameDTO } from '../../shared/games.service';
+import { PastBetsService, PastBet, SavePastBetPayload } from '../../shared/past-bets.service';
 
 type BetMode = 'Single' | 'SGP' | 'SGP+';
 
@@ -36,6 +37,12 @@ export class BetGeneratorComponent implements OnInit {
   private gen  = inject(GeneratorService);
   private ai   = inject(AiSlipService);
   private gamesSvc = inject(GamesService);
+  private past   = inject(PastBetsService);
+
+  // trackBys used in the template
+  trackChoice = (_: number, opt: { value: number }) => opt.value;
+  trackDay    = (_: number, d: { dateKey: string }) => d.dateKey;
+  trackGame   = (_: number, g: GameDTO) => g.id;
 
   aiLoading = signal(false);
   aiError   = signal<string | null>(null);
@@ -74,6 +81,9 @@ export class BetGeneratorComponent implements OnInit {
   // Date range filter (today..+6)
   startOffset = signal(0);
   endOffset   = signal(0);
+
+  // Editable odds for the AI slip
+  editableOdds = signal<string>('');
 
   dayChoices = computed(() => {
     const out: { value: number; label: string }[] = [];
@@ -209,7 +219,7 @@ export class BetGeneratorComponent implements OnInit {
     }));
   });
 
-  // NEW: count of visible selected games
+  // Count of visible selected games
   selectedVisibleCount = computed(() => {
     const chosen = this.selectedGameIds();
     let n = 0;
@@ -229,14 +239,14 @@ export class BetGeneratorComponent implements OnInit {
     !this.boostInvalid()
   );
 
-  // Mock generator (kept working; silently uses slips: 1)
+  // Mock generator (kept; uses slips: 1)
   generate() {
     if (!this.canGenerate()) return;
     const input: GeneratorInput = {
       sport: this.sport(),
       mode: this.mode(),
       legs: this.mode() === 'Single' ? 1 : this.legs(),
-      slips: 1, // <-- fixed silently; UI control removed
+      slips: 1,
       minOdds: this.minOdds(),
       maxOdds: this.maxOdds(),
       models: Array.from(this.selectedIds())
@@ -275,7 +285,6 @@ export class BetGeneratorComponent implements OnInit {
     this.loadGames();
   }
 
-  // Selection helpers
   selectAllVisible() {
     const next = new Set(this.selectedGameIds());
     for (const day of this.groupedGames()) for (const g of day.items) next.add(g.id);
@@ -298,11 +307,6 @@ export class BetGeneratorComponent implements OnInit {
     if (bucket) for (const g of bucket.items) next.delete(g.id);
     this.selectedGameIds.set(next);
   }
-
-  // TrackBys
-  trackDay = (_: number, d: { dateKey: string }) => d.dateKey;
-  trackGame = (_: number, g: GameDTO) => g.id;
-  trackChoice = (_: number, c: { value: number }) => c.value;
 
   // Pretty local time
   formatTime(iso: string): string {
@@ -335,7 +339,7 @@ export class BetGeneratorComponent implements OnInit {
     this.selectedGameIds.set(next);
   }
 
-  // AI call (no 'slips' sent)
+  // ===== AI call + editable odds / save / discard =====
   generateAiSlip() {
     if (this.selectedVisibleCount() === 0) {
       this.aiError.set('Select at least one game in the chosen date range.');
@@ -364,7 +368,13 @@ export class BetGeneratorComponent implements OnInit {
     };
 
     this.ai.generateSlip(filters).subscribe({
-      next: (s) => { this.aiSlip.set(s); this.aiLoading.set(false); },
+      next: (s) => {
+        this.aiSlip.set(s);
+        // init editable odds
+        const eo = this.initialEditableOdds(s);
+        this.editableOdds.set(eo);
+        this.aiLoading.set(false);
+      },
       error: (err) => {
         const raw = err?.error;
         const msg = (typeof raw === 'string' && raw) || raw?.message || err?.message || 'Failed to generate slip';
@@ -374,8 +384,52 @@ export class BetGeneratorComponent implements OnInit {
     });
   }
 
+  onEditableOddsInput(ev: Event) {
+    this.editableOdds.set(String((ev.target as HTMLInputElement).value || '').trim());
+  }
+
+  private initialEditableOdds(s: AiBetSlip): string {
+    if (this.mode() === 'Single') {
+      const o = s?.legs?.[0]?.odds || '';
+      return o || '';
+    }
+    return s?.combinedOdds ||
+           s?.estimatedPayout?.postBoostAmerican ||
+           s?.estimatedPayout?.preBoostAmerican || '';
+  }
+
   discardAiSlip() { this.aiSlip.set(null); }
-  saveAiSlip() { /* later */ }
+
+  saveAiSlip() {
+    const s = this.aiSlip();
+    if (!s) return;
+
+    // Choose the odds: use edited value if present, else any combinedOdds/rationalized odds from the AI slip.
+    const edited = (this as any).editOdds?.(); // if you have an edit field
+    const fallback = (s as any).combinedOdds || (s as any).estimatedPayout?.postBoostAmerican || (s as any).estimatedPayout?.preBoostAmerican || '';
+    const oddsText = (edited ?? '').toString().trim() || String(fallback || '').trim();
+
+    const payload: SavePastBetPayload = {
+      type: this.mode(),
+      date: new Date().toISOString(),
+      model: this.selectedModel(),   // your single selected model id/name
+      sport: this.sport(),
+      event: s.event || s.title || 'Bet Slip',
+      odds: oddsText
+    };
+
+    this.past.save(payload).subscribe({
+      next: () => {
+        // Clear the slip from screen once saved
+        this.aiSlip.set(null);
+        // optionally show a toast/snackbar
+      },
+      error: (err) => {
+        this.aiError.set(err?.error?.message || err?.message || 'Failed to save bet');
+      }
+    });
+  }
+
 
   // Boost helpers
   toggleBoost(checked: boolean) {
