@@ -54,7 +54,7 @@ const SERIES_COLORS = ['#60a5fa','#22c55e','#eab308','#2dd4bf','#94a3b8','#f8717
   styleUrls: ['./dashboard.component.scss']
 })
 export class DashboardComponent {
-  public data = inject(MockDataService); // still used for the model list / defaults
+  public data = inject(MockDataService); // model list / defaults
   private demoSvc = inject(DemoStateService);
   private statsApi = inject(StatsService);
   private pastApi = inject(PastBetsService);
@@ -86,7 +86,7 @@ export class DashboardComponent {
   }
 
   private reloadBets() {
-    this.pastApi.list()
+    this.pastApi.list(15) // <-- ensure only last 15 bets are loaded
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({ next: rows => this.bets.set(rows) });
   }
@@ -150,79 +150,64 @@ export class DashboardComponent {
     this.data.models.filter(m => m.selected).map(m => m.id)
   ));
 
-  /** ======== CUMULATIVE GAINS CHART (live from real bets) ========
-   * Builds cumulative units over time per selected model & current mode.
-   * Only graded bets (win/loss/push) are included; ungraded are ignored.
-   * Dates are grouped by day to keep the X axis tidy.
-   */
+    /** ======== CUMULATIVE UNITS (last 15 graded bets across selected models) ======== */
   lineCfg = computed<ChartConfiguration<'line'>>(() => {
     const list = this.bets() ?? [];
-    if (!list.length) {
-      return {
-        type: 'line',
-        data: { labels: [], datasets: [] },
-        options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { x: { grid: { display: false } } } }
-      };
-    }
-
-    const chosen = new Set(this.selectedIds());
     const currentMode = this.mode();
 
-    // Helper: YYYY-MM-DD from ISO
-    const dayKey = (iso: string) => {
-      const d = new Date(iso);
-      // Normalize to local date. If you want UTC, use getUTC* instead.
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${y}-${m}-${day}`;
-    };
-    const pretty = (key: string) => {
-      const d = new Date(key);
+    // Build a set with selected model IDs and Names (lowercased) for robust matching
+    const selected = this.selectedIds();
+    const idSetLC = new Set<string>(Array.from(selected).map(s => s.toLowerCase()));
+    const nameByIdLC = new Map<string, string>(
+      this.data.models.map(m => [m.id.toLowerCase(), m.name.toLowerCase()])
+    );
+    const nameFromId = (idLC: string) => nameByIdLC.get(idLC);
+    const allowedLC = new Set<string>([
+      ...idSetLC,
+      ...Array.from(idSetLC).map((id) => nameFromId(id) || '').filter(Boolean) as string[]
+    ]);
+
+    // Keep only graded bets in the current mode for selected models (match by id or name)
+    const graded = list.filter(b => {
+      if (!b || !b.result || (b.result !== 'win' && b.result !== 'loss' && b.result !== 'push')) return false;
+      if (b.type !== currentMode) return false;
+      const bm = (b.model || '').toLowerCase();
+      const isMatch =
+        allowedLC.has(bm) ||
+        (nameByIdLC.has(bm) && allowedLC.has(nameByIdLC.get(bm)!)) ||
+        Array.from(nameByIdLC.entries()).some(([id, nm]) => nm === bm && allowedLC.has(id));
+      return isMatch;
+    });
+
+    // Sort oldest->newest and take the last 15
+    graded.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const last15 = graded.slice(-15);
+
+    // Build cumulative series
+    let cum = 0;
+    const labels = last15.map(b => {
+      const d = new Date(b.date);
       return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    };
-
-    // Collect graded bets per model & date for the current mode
-    const perModelPerDay = new Map<string, Map<string, number>>(); // model -> day -> unitsSum
-    const allDays = new Set<string>();
-
-    for (const b of list) {
-      if (!b || !b.result || (b.result !== 'win' && b.result !== 'loss' && b.result !== 'push')) continue;
-      if (b.type !== currentMode) continue;
-      if (!chosen.has(b.model)) continue; // b.model is already an id/name in your data
-      const dk = dayKey(b.date);
-      allDays.add(dk);
-      const m = (perModelPerDay.get(b.model) ?? new Map<string, number>());
-      m.set(dk, (m.get(dk) ?? 0) + (typeof b.resultUnits === 'number' ? b.resultUnits : 0));
-      perModelPerDay.set(b.model, m);
-    }
-
-    const sortedDays = Array.from(allDays).sort((a, b) => a.localeCompare(b));
-    const labels = sortedDays.map(pretty);
-
-    // Build datasets: carry forward the last cumulative value on days with no change
-    const datasets = Array.from(chosen).map((modelId, idx) => {
-      const dayMap = perModelPerDay.get(modelId) ?? new Map<string, number>();
-      let cum = 0;
-      const values = sortedDays.map(dk => {
-        cum += (dayMap.get(dk) ?? 0);
-        return cum;
-      });
-      // Find a nice label for modelId (fallback to id)
-      const display = this.data.models.find(m => m.id === modelId)?.name || modelId;
-      return {
-        label: display,
-        data: values,
-        tension: 0.35,
-        pointRadius: 0,
-        borderWidth: 2,
-        borderColor: SERIES_COLORS[idx % SERIES_COLORS.length]
-      };
-    }).filter(ds => ds.data.some(v => v !== 0)); // hide empty-flat series
+    });
+    const values = last15.map(b => {
+      const u = typeof b.resultUnits === 'number' ? b.resultUnits : 0;
+      cum += u;
+      return cum;
+    });
 
     return {
       type: 'line',
-      data: { labels, datasets },
+      data: {
+        labels,
+        datasets: [{
+          label: 'Cumulative Units (Last 15)',
+          data: values,
+          tension: 0.35,
+          pointRadius: 0,
+          borderWidth: 2,
+          borderColor: SERIES_COLORS[0],
+        }]
+      },
       options: {
         responsive: true,
         plugins: { legend: { position: 'bottom' } },
@@ -230,6 +215,7 @@ export class DashboardComponent {
       }
     };
   });
+
 
   recent = computed<RecentRow[]>(() => {
     const list = this.bets() ?? [];
