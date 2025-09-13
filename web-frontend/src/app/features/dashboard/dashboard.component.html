@@ -1,18 +1,9 @@
 <div class="page">
-  <!-- Demo banner -->
-  <mat-card class="demo-banner" *ngIf="demo()">
-    <mat-icon aria-hidden="true">warning_amber</mat-icon>
-    <div>
-      <strong>Demo mode:</strong>
-      The charts and tables below use example data only and do not reflect real bets.
-    </div>
-  </mat-card>
-
   <!-- Filters -->
   <div class="filters">
     <mat-chip-listbox aria-label="Sport filter">
       <mat-chip-option
-        *ngFor="let s of data.sports"
+        *ngFor="let s of sports()"
         [selected]="sport() === s"
         (click)="setSport(s)">{{ s }}</mat-chip-option>
     </mat-chip-listbox>
@@ -37,9 +28,9 @@
     </mat-card>
   </div>
 
-  <!-- Chart (demo-only series) -->
+  <!-- Chart -->
   <div class="section">
-    <h3>Cumulative Gain L15</h3>
+    <h3>Cumulative Units (Last 15)</h3>
     <div class="chart-wrap" *ngIf="isBrowser">
       <canvas
         baseChart
@@ -52,7 +43,6 @@
 
   <!-- Recent bets table -->
   <table mat-table [dataSource]="recent()" class="mat-elevation-z1 w-full">
-
     <!-- Date -->
     <ng-container matColumnDef="date">
       <th mat-header-cell *matHeaderCellDef>Date</th>
@@ -94,41 +84,10 @@
       <th mat-header-cell *matHeaderCellDef>Grade</th>
       <td mat-cell *matCellDef="let row">
         <mat-chip-set class="grade-set">
-          <mat-chip
-            class="grade-chip win"
-            [class.is-selected]="row.result === 'win'"
-            (click)="grade(row, 'win')"
-            selectable="false"
-            aria-pressed="{{ row.result === 'win' }}"
-            title="Mark as Win"
-          >Win</mat-chip>
-
-          <mat-chip
-            class="grade-chip loss"
-            [class.is-selected]="row.result === 'loss'"
-            (click)="grade(row, 'loss')"
-            selectable="false"
-            aria-pressed="{{ row.result === 'loss' }}"
-            title="Mark as Loss"
-          >Loss</mat-chip>
-
-          <mat-chip
-            class="grade-chip push"
-            [class.is-selected]="row.result === 'push'"
-            (click)="grade(row, 'push')"
-            selectable="false"
-            aria-pressed="{{ row.result === 'push' }}"
-            title="Mark as Push"
-          >Push</mat-chip>
-
-          <mat-chip
-            class="grade-chip clear"
-            [class.is-selected]="!row.result"
-            (click)="grade(row, '')"
-            selectable="false"
-            aria-pressed="{{ !row.result }}"
-            title="Clear result"
-          >Clear</mat-chip>
+          <mat-chip class="grade-chip win"  [class.is-selected]="row.result === 'win'"  (click)="grade(row, 'win')"  selectable="false">Win</mat-chip>
+          <mat-chip class="grade-chip loss" [class.is-selected]="row.result === 'loss'" (click)="grade(row, 'loss')" selectable="false">Loss</mat-chip>
+          <mat-chip class="grade-chip push" [class.is-selected]="row.result === 'push'" (click)="grade(row, 'push')" selectable="false">Push</mat-chip>
+          <mat-chip class="grade-chip clear"[class.is-selected]="!row.result"       (click)="grade(row, '')"      selectable="false">Clear</mat-chip>
         </mat-chip-set>
       </td>
     </ng-container>
@@ -137,14 +96,11 @@
     <ng-container matColumnDef="result">
       <th mat-header-cell *matHeaderCellDef>Result</th>
       <td mat-cell *matCellDef="let row">
-        <span [ngClass]="resultClass(row)">
-          {{ formatUnits(row) }}
-        </span>
+        <span [ngClass]="resultClass(row)">{{ formatUnits(row) }}</span>
       </td>
     </ng-container>
 
     <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
     <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
   </table>
-
 </div>

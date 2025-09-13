@@ -11,12 +11,10 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
 
-import { MockDataService } from '../../shared/mock-data.service';
-import { GeneratorService, GeneratorInput, Slip } from '../../shared/generator.service';
-import { Sport } from '../../shared/types';
+import { Sport, SPORTS, MODEL_OPTIONS, ModelOption } from '../../shared/types';
 import { AiSlipService, AiBetSlip, AiFilters } from '../../shared/ai-slip.service';
 import { GamesService, GameDTO } from '../../shared/games.service';
-import { PastBetsService, PastBet, SavePastBetPayload } from '../../shared/past-bets.service';
+import { PastBetsService, SavePastBetPayload } from '../../shared/past-bets.service';
 
 type BetMode = 'Single' | 'SGP' | 'SGP+';
 
@@ -32,32 +30,17 @@ type BetMode = 'Single' | 'SGP' | 'SGP+';
   styleUrls: ['./bet-generator.component.scss']
 })
 export class BetGeneratorComponent implements OnInit {
-  // Services
-  public data = inject(MockDataService);
-  private gen  = inject(GeneratorService);
-  private ai   = inject(AiSlipService);
+  private ai       = inject(AiSlipService);
   private gamesSvc = inject(GamesService);
-  private past   = inject(PastBetsService);
+  private past     = inject(PastBetsService);
 
-  // trackBys used in the template
+  // trackBys used in template
   trackChoice = (_: number, opt: { value: number }) => opt.value;
   trackDay    = (_: number, d: { dateKey: string }) => d.dateKey;
   trackGame   = (_: number, g: GameDTO) => g.id;
+  trackModel  = (_: number, m: { id: string }) => m.id;
 
-  aiLoading = signal(false);
-  aiError   = signal<string | null>(null);
-  aiSlip    = signal<AiBetSlip | null>(null);
-
-  // Games & selection
-  games = signal<GameDTO[]>([]);
-  gamesLoading = signal(false);
-  gamesError = signal<string | null>(null);
-  selectedGameIds = signal<Set<string>>(new Set());
-
-  // Expose sports
-  sports = this.data.sports;
-
-  // Parameters
+  // UI state
   sport = signal<Sport>('MLB');
   mode  = signal<BetMode>('Single');
   legs  = signal(1);
@@ -66,24 +49,47 @@ export class BetGeneratorComponent implements OnInit {
   minOdds = signal(300);
   maxOdds = signal(700);
 
-  // Models
-  models = computed(() => this.data.models);
-  selectedIds = signal(new Set<string>());
-
-  // Output slips (for mock generator)
-  private out = signal<Slip[] | null>(null);
-  slipsOut = computed(() => this.out());
-
   // Boost
   boostEnabled = signal(false);
   boostPct = signal<number | null>(null);
+
+  // Games & selection
+  games = signal<GameDTO[]>([]);
+  gamesLoading = signal(false);
+  gamesError = signal<string | null>(null);
+  selectedGameIds = signal<Set<string>>(new Set());
+
+  // Canonical sports & models from shared types
+  readonly sports: Sport[] = SPORTS;
+  // Expose as a computed so template can call models()
+  models = computed<ModelOption[]>(() => MODEL_OPTIONS);
+
+  // Exactly one model must be selected
+  selectedIds = signal(new Set<string>([MODEL_OPTIONS[0]?.id].filter(Boolean) as string[]));
+
+  // AI slip state
+  aiLoading = signal(false);
+  aiError   = signal<string | null>(null);
+  aiSlip    = signal<AiBetSlip | null>(null);
+  editableOdds = signal<string>('');
 
   // Date range filter (today..+6)
   startOffset = signal(0);
   endOffset   = signal(0);
 
-  // Editable odds for the AI slip
-  editableOdds = signal<string>('');
+  // Visible window helpers
+  private visibleStart = computed(() => {
+    const base = startOfLocalDay(new Date());
+    const d = new Date(base);
+    d.setDate(d.getDate() + this.startOffset());
+    return startOfLocalDay(d);
+  });
+  private visibleEnd = computed(() => {
+    const base = startOfLocalDay(new Date());
+    const d = new Date(base);
+    d.setDate(d.getDate() + this.endOffset());
+    return endOfLocalDay(d);
+  });
 
   dayChoices = computed(() => {
     const out: { value: number; label: string }[] = [];
@@ -100,6 +106,56 @@ export class BetGeneratorComponent implements OnInit {
     }
     return out;
   });
+
+  groupedGames = computed(() => {
+    const arr = this.games();
+    if (!arr?.length) return [];
+    const from = this.visibleStart();
+    const to   = this.visibleEnd();
+    const filtered = arr
+      .filter(g => {
+        const d = new Date(g.start);
+        return d >= from && d <= to;
+      })
+      .sort((a, b) => a.start.localeCompare(b.start));
+
+    const map = new Map<string, { label: string; items: GameDTO[] }>();
+    for (const g of filtered) {
+      const d = new Date(g.start);
+      const key = ymdLocal(d);
+      const label = d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: '2-digit' });
+      if (!map.has(key)) map.set(key, { label, items: [] });
+      map.get(key)!.items.push(g);
+    }
+    return Array.from(map.entries()).map(([dateKey, v]) => ({
+      dateKey, label: v.label, items: v.items
+    }));
+  });
+
+  selectedVisibleCount = computed(() => {
+    const chosen = this.selectedGameIds();
+    let n = 0;
+    for (const day of this.groupedGames()) {
+      for (const g of day.items) if (chosen.has(g.id)) n++;
+    }
+    return n;
+  });
+
+  // Validation helper referenced in template/logic
+  boostInvalid(): boolean {
+    if (!this.boostEnabled()) return false;
+    const v = this.boostPct();
+    return v == null || v < 0 || v > 100;
+  }
+
+  canGenerate = computed(() =>
+    !this.oddsInvalid('min') &&
+    !this.oddsInvalid('max') &&
+    (this.mode() === 'Single' ? this.legs() === 1 : this.legs() >= 1) &&
+    this.selectedIds().size === 1 &&
+    this.selectedVisibleCount() > 0 &&
+    !this.boostInvalid()
+  );
 
   ngOnInit(): void { this.loadGames(); }
 
@@ -178,97 +234,9 @@ export class BetGeneratorComponent implements OnInit {
       const n = new Set(prev); checked ? n.add(id) : n.delete(id); return n;
     });
   }
-  trackModel = (_: number, m: { id: string }) => m.id;
-
-  // Visible window helpers
-  private visibleStart = computed(() => {
-    const base = startOfLocalDay(new Date());
-    const d = new Date(base);
-    d.setDate(d.getDate() + this.startOffset());
-    return startOfLocalDay(d);
-  });
-  private visibleEnd = computed(() => {
-    const base = startOfLocalDay(new Date());
-    const d = new Date(base);
-    d.setDate(d.getDate() + this.endOffset());
-    return endOfLocalDay(d);
-  });
-
-  groupedGames = computed(() => {
-    const arr = this.games();
-    if (!arr || !arr.length) return [];
-    const from = this.visibleStart();
-    const to   = this.visibleEnd();
-    const filtered = arr
-      .filter(g => {
-        const d = new Date(g.start);
-        return d >= from && d <= to;
-      })
-      .sort((a, b) => a.start.localeCompare(b.start));
-
-    const map = new Map<string, { label: string; items: GameDTO[] }>();
-    for (const g of filtered) {
-      const d = new Date(g.start);
-      const key = ymdLocal(d);
-      const label = d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: '2-digit' });
-      if (!map.has(key)) map.set(key, { label, items: [] });
-      map.get(key)!.items.push(g);
-    }
-    return Array.from(map.entries()).map(([dateKey, v]) => ({
-      dateKey, label: v.label, items: v.items
-    }));
-  });
-
-  // Count of visible selected games
-  selectedVisibleCount = computed(() => {
-    const chosen = this.selectedGameIds();
-    let n = 0;
-    for (const day of this.groupedGames()) {
-      for (const g of day.items) if (chosen.has(g.id)) n++;
-    }
-    return n;
-  });
-
-  // Gate generation
-  canGenerate = computed(() =>
-    !this.oddsInvalid('min') &&
-    !this.oddsInvalid('max') &&
-    (this.mode() === 'Single' ? this.legs() === 1 : this.legs() >= 1) &&
-    this.selectedIds().size === 1 &&
-    this.selectedVisibleCount() > 0 &&
-    !this.boostInvalid()
-  );
-
-  // Mock generator (kept; uses slips: 1)
-  generate() {
-    if (!this.canGenerate()) return;
-    const input: GeneratorInput = {
-      sport: this.sport(),
-      mode: this.mode(),
-      legs: this.mode() === 'Single' ? 1 : this.legs(),
-      slips: 1,
-      minOdds: this.minOdds(),
-      maxOdds: this.maxOdds(),
-      models: Array.from(this.selectedIds())
-    };
-    this.out.set(this.gen.generate(input));
-  }
-
-  clearResults() { this.out.set(null); }
-
-  getSelection(l: unknown): string {
-    const a = l as any;
-    return (a?.selection ?? a?.pick ?? a?.side ?? '') + '';
-  }
-
-  selectedModel = computed<string>(() => {
-    const set = this.selectedIds();
-    return set && set.size ? Array.from(set)[0] : 'Narrative';
-  });
-
-  setExclusiveModel(name: string, checked: boolean) {
+  setExclusiveModel(id: string, checked: boolean) {
     if (!checked) return;
-    this.selectedIds.set(new Set([name]));
+    this.selectedIds.set(new Set([id]));
   }
 
   // Range handlers
@@ -285,22 +253,38 @@ export class BetGeneratorComponent implements OnInit {
     this.loadGames();
   }
 
+  // === Template helpers your HTML expects ===
+
+  /** Toggle a single game (checkbox change) */
+  toggleGame(id: string, checked: boolean) {
+    const next = new Set(this.selectedGameIds());
+    if (checked) next.add(id); else next.delete(id);
+    this.selectedGameIds.set(next);
+  }
+
+  /** Add all currently visible games to selection */
   selectAllVisible() {
     const next = new Set(this.selectedGameIds());
     for (const day of this.groupedGames()) for (const g of day.items) next.add(g.id);
     this.selectedGameIds.set(next);
   }
+
+  /** Remove all currently visible games from selection */
   clearVisible() {
     const next = new Set(this.selectedGameIds());
     for (const day of this.groupedGames()) for (const g of day.items) next.delete(g.id);
     this.selectedGameIds.set(next);
   }
+
+  /** Add all games for a specific day bucket (by dateKey) */
   selectDay(dateKey: string) {
     const next = new Set(this.selectedGameIds());
     const bucket = this.groupedGames().find(d => d.dateKey === dateKey);
     if (bucket) for (const g of bucket.items) next.add(g.id);
     this.selectedGameIds.set(next);
   }
+
+  /** Remove all games for a specific day bucket (by dateKey) */
   clearDay(dateKey: string) {
     const next = new Set(this.selectedGameIds());
     const bucket = this.groupedGames().find(d => d.dateKey === dateKey);
@@ -308,7 +292,7 @@ export class BetGeneratorComponent implements OnInit {
     this.selectedGameIds.set(next);
   }
 
-  // Pretty local time
+  /** Pretty local time for a game start ISO */
   formatTime(iso: string): string {
     const d = new Date(iso);
     return d.toLocaleString(undefined, {
@@ -333,16 +317,14 @@ export class BetGeneratorComponent implements OnInit {
     });
   }
 
-  toggleGame(id: string, checked: boolean) {
-    const next = new Set(this.selectedGameIds());
-    if (checked) next.add(id); else next.delete(id);
-    this.selectedGameIds.set(next);
-  }
-
   // ===== AI call + editable odds / save / discard =====
   generateAiSlip() {
     if (this.selectedVisibleCount() === 0) {
       this.aiError.set('Select at least one game in the chosen date range.');
+      return;
+    }
+    if (this.selectedIds().size !== 1) {
+      this.aiError.set('Select exactly one model.');
       return;
     }
 
@@ -362,7 +344,7 @@ export class BetGeneratorComponent implements OnInit {
       legs:   this.mode() === 'Single' ? 1 : Math.max(1, Number(this.legs() ?? 1)),
       minOdds: Number(this.minOdds() ?? 0),
       maxOdds: Number(this.maxOdds() ?? 0),
-      model:  this.selectedModel(),
+      model:  Array.from(this.selectedIds())[0] || '',
       boostPct: this.boostEnabled() ? (this.boostPct() ?? 0) : 0,
       games: visible,
     };
@@ -370,9 +352,7 @@ export class BetGeneratorComponent implements OnInit {
     this.ai.generateSlip(filters).subscribe({
       next: (s) => {
         this.aiSlip.set(s);
-        // init editable odds
-        const eo = this.initialEditableOdds(s);
-        this.editableOdds.set(eo);
+        this.editableOdds.set(this.initialEditableOdds(s));
         this.aiLoading.set(false);
       },
       error: (err) => {
@@ -398,52 +378,45 @@ export class BetGeneratorComponent implements OnInit {
            s?.estimatedPayout?.preBoostAmerican || '';
   }
 
+  /** Old template hook: clear results — here we just clear the AI slip */
+  clearResults() { this.aiSlip.set(null); }
+
+  /** Old template hook: mock slips container — return null to keep *ngIf satisfied */
+  slipsOut() { return null as any; }
+
+  /** Old template helper used to render a leg’s selection text */
+  getSelection(l: unknown): string {
+    const a = l as any;
+    return (a?.selection ?? a?.pick ?? a?.side ?? '') + '';
+  }
+
   discardAiSlip() { this.aiSlip.set(null); }
 
   saveAiSlip() {
     const s = this.aiSlip();
     if (!s) return;
 
-    // Choose the odds: use edited value if present, else any combinedOdds/rationalized odds from the AI slip.
-    const edited = (this as any).editOdds?.(); // if you have an edit field
-    const fallback = (s as any).combinedOdds || (s as any).estimatedPayout?.postBoostAmerican || (s as any).estimatedPayout?.preBoostAmerican || '';
-    const oddsText = (edited ?? '').toString().trim() || String(fallback || '').trim();
+    const fallback =
+      (s as any).combinedOdds ||
+      (s as any).estimatedPayout?.postBoostAmerican ||
+      (s as any).estimatedPayout?.preBoostAmerican || '';
+    const oddsText = (this.editableOdds() || '').trim() || String(fallback || '').trim();
 
     const payload: SavePastBetPayload = {
       type: this.mode(),
       date: new Date().toISOString(),
-      model: this.selectedModel(),   // your single selected model id/name
+      model: Array.from(this.selectedIds())[0] || '',
       sport: this.sport(),
-      event: s.event || s.title || 'Bet Slip',
+      event: (s as any).event || (s as any).title || 'Bet Slip',
       odds: oddsText
     };
 
     this.past.save(payload).subscribe({
-      next: () => {
-        // Clear the slip from screen once saved
-        this.aiSlip.set(null);
-        // optionally show a toast/snackbar
-      },
+      next: () => { this.aiSlip.set(null); },
       error: (err) => {
         this.aiError.set(err?.error?.message || err?.message || 'Failed to save bet');
       }
     });
-  }
-
-
-  // Boost helpers
-  toggleBoost(checked: boolean) {
-    this.boostEnabled.set(checked);
-    if (!checked) this.boostPct.set(null);
-  }
-  onBoostInput(ev: Event) {
-    const v = Number((ev.target as HTMLInputElement).value);
-    this.boostPct.set(Number.isFinite(v) ? v : null);
-  }
-  boostInvalid(): boolean {
-    if (!this.boostEnabled()) return false;
-    const v = this.boostPct();
-    return v == null || v < 0 || v > 100;
   }
 }
 

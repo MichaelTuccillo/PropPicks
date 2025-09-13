@@ -4,8 +4,8 @@
 
   <span class="spacer"></span>
 
-  <!-- When signed in OR in demo -->
-  <ng-container *ngIf="demo() || auth.isAuthed(); else guest">
+  <!-- When signed in-->
+  <ng-container *ngIf="auth.isAuthed(); else guest">
     <a mat-button routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
     <a mat-button routerLink="/generate"  routerLinkActive="active">Generate</a>
 
@@ -23,12 +23,6 @@
       <button mat-menu-item *ngIf="auth.isAuthed()" (click)="onSignOut()">
         <mat-icon>logout</mat-icon>
         <span>Sign out</span>
-      </button>
-
-      <!-- Demo user -->
-      <button mat-menu-item *ngIf="!auth.isAuthed()" (click)="signOutDemo()">
-        <mat-icon>logout</mat-icon>
-        <span>Exit demo</span>
       </button>
     </mat-menu>
 

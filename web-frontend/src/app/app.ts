@@ -3,7 +3,6 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet, NavigationEnd } fro
 import { NgIf } from '@angular/common';
 import { filter } from 'rxjs/operators';
 
-import { DemoStateService } from './shared/demo-state.service';
 import { ThemeService } from './shared/theme.service'; // optional
 import { AuthService } from './shared/auth.service';
 
@@ -25,29 +24,12 @@ import { MatDividerModule } from '@angular/material/divider';
 })
 export class AppComponent {
   private router  = inject(Router);
-  private demoSvc = inject(DemoStateService);
 
-  demo = this.demoSvc.demo;           // signal for template
   theme = inject(ThemeService, { optional: true });
   auth = inject(AuthService);
 
   async ngOnInit() {
     await this.auth.hydrate(); // ask backend if a user cookie exists
-  }
-
-  constructor() {
-    // When user returns to landing, turn demo OFF automatically
-    this.router.events.pipe(filter(e => e instanceof NavigationEnd))
-      .subscribe(() => {
-        if (this.router.url === '/' && this.demo()) {
-          this.demoSvc.exit();
-        }
-      });
-  }
-
-  signOutDemo() {
-    this.demoSvc.exit();
-    this.router.navigateByUrl('/');
   }
 
   goHome() {
