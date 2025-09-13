@@ -1,17 +1,36 @@
 package main
 
-import "gorm.io/gorm"
+import (
+	"gorm.io/gorm"
+	"strings"
+)
 
-// Updates/creates the per-user, per-model, per-sport aggregate row when a bet’s result changes.
-func upsertUserModelStat(
+// Normalize mode to canonical values: "Single" | "SGP" | "SGP+" | "ALL"
+func normMode(in string) string {
+	switch strings.ToUpper(strings.TrimSpace(in)) {
+	case "SINGLE":
+		return "Single"
+	case "SGP":
+		return "SGP"
+	case "SGP+":
+		return "SGP+"
+	default:
+		return "ALL"
+	}
+}
+
+// Update/create ONE aggregate row for (user, model, sport, mode).
+func upsertOneMode(
 	db *gorm.DB,
-	userKey, model, sport, prev, next string,
+	userKey, model, sport, mode, prev, next string,
 	prevUnits, nextUnits float64,
 ) error {
 	var s UserModelStat
-	err := db.Where(&UserModelStat{UserKey: userKey, Model: model, Sport: sport}).First(&s).Error
+	err := db.Where(&UserModelStat{
+		UserKey: userKey, Model: model, Sport: sport, Mode: mode,
+	}).First(&s).Error
 	if err == gorm.ErrRecordNotFound {
-		s = UserModelStat{UserKey: userKey, Model: model, Sport: sport}
+		s = UserModelStat{UserKey: userKey, Model: model, Sport: sport, Mode: mode}
 	} else if err != nil {
 		return err
 	}
@@ -61,4 +80,20 @@ func upsertUserModelStat(
 	}
 
 	return db.Save(&s).Error
+}
+
+// Public helper: update BOTH the per-mode row and the ALL row.
+// mode should be "Single" | "SGP" | "SGP+" (we'll also write "ALL").
+func upsertUserModelStat(
+	db *gorm.DB,
+	userKey, model, sport, mode, prev, next string,
+	prevUnits, nextUnits float64,
+) error {
+	cMode := normMode(mode)
+	// per-mode row
+	if err := upsertOneMode(db, userKey, model, sport, cMode, prev, next, prevUnits, nextUnits); err != nil {
+		return err
+	}
+	// ALL row (keeps your existing "ALL-time" aggregates working)
+	return upsertOneMode(db, userKey, model, sport, "ALL", prev, next, prevUnits, nextUnits)
 }

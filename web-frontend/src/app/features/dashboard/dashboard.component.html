@@ -24,35 +24,22 @@
     </mat-button-toggle-group>
   </div>
 
-  <!-- Model cards -->
-  <div class="grid">
-    <mat-card *ngFor="let m of summaries()">
-      <div class="card-head">
-        <div class="title">{{ m.name }}</div>
-        <a [routerLink]="['/models', m.id]" mat-icon-button aria-label="Details">
-          <mat-icon>open_in_new</mat-icon>
-        </a>
-      </div>
-
-      <div class="stats">
-        <div><span>All-time W/L</span><strong>{{ m.all_wl }}</strong></div>
-        <div>
-          <span>All-time ROI</span>
-          <strong [class.pos]="m.all_roi>=0" [class.neg]="m.all_roi<0">{{ m.all_roi }}%</strong>
-        </div>
-      </div>
-
-      <mat-checkbox
-        [checked]="selectedIds().has(m.id)"
-        (change)="toggleModel(m.id, $event.checked)">
-        Include in chart
-      </mat-checkbox>
+  <!-- Summary cards (W-L and Units only) -->
+  <div class="summary-grid" *ngIf="summaries().length">
+    <mat-card class="summary-card" *ngFor="let c of summaries(); trackBy: trackModel">
+      <div class="summary-title">{{ c.name }}</div>
+      <mat-chip-set class="meta-chips">
+        <mat-chip class="wl-chip">{{ c.all_wl }}</mat-chip>
+        <mat-chip class="units-chip" [ngClass]="{ 'pos': c.all_units >= 0, 'neg': c.all_units < 0 }">
+          Units {{ c.all_units_str }}
+        </mat-chip>
+      </mat-chip-set>
     </mat-card>
   </div>
 
   <!-- Chart (demo-only series) -->
   <div class="section">
-    <h3>Cumulative % Gain (L14D)</h3>
+    <h3>Cumulative % Gain L15</h3>
     <div class="chart-wrap" *ngIf="isBrowser">
       <canvas
         baseChart
@@ -63,6 +50,7 @@
     </div>
   </div>
 
+  <!-- Recent bets table -->
   <table mat-table [dataSource]="recent()" class="mat-elevation-z1 w-full">
 
     <!-- Date -->

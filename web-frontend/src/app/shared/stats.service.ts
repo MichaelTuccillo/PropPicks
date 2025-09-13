@@ -15,15 +15,18 @@ export type StatRow = {
   roiPct: number;
 };
 
+export type Mode = 'Single' | 'SGP' | 'SGP+' | 'ALL';
+
 @Injectable({ providedIn: 'root' })
 export class StatsService {
   private http = inject(HttpClient);
   private auth = inject(AuthService);
   private base = `${environment.apiBase}/model-stats`;
 
-  fetch(): Observable<StatRow[]> {
+  fetch(mode: 'Single'|'SGP'|'SGP+'|'ALL' = 'ALL'): Observable<StatRow[]> {
     if (!this.auth.user()) return of([]);
-    return this.http.get<{ stats: StatRow[] }>(this.base, { withCredentials: true })
+    const q = encodeURIComponent(mode);
+    return this.http.get<{ stats: StatRow[] }>(`${this.base}?mode=${q}`, { withCredentials: true })
       .pipe(
         takeUntil(this.auth.logout$),
         map(r => r?.stats ?? [])

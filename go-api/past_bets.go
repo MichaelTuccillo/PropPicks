@@ -44,9 +44,10 @@ type PastBetRecord struct {
 
 type UserModelStat struct {
 	ID        uint      `gorm:"primaryKey"`
-	UserKey   string    `gorm:"index:idx_user_model_sport,unique;type:text;not null"`
-	Model     string    `gorm:"index:idx_user_model_sport,unique;type:text;not null"`
-	Sport     string    `gorm:"index:idx_user_model_sport,unique;type:text;not null"` // NFL/NBA/NHL/MLB or "ALL"
+	UserKey   string    `gorm:"index:idx_user_model_sport_mode,unique;type:text;not null"`
+	Model     string    `gorm:"index:idx_user_model_sport_mode,unique;type:text;not null"`
+	Sport     string    `gorm:"index:idx_user_model_sport_mode,unique;type:text;not null"` // NFL/NBA/NHL/MLB or "ALL"
+	Mode      string    `gorm:"index:idx_user_model_sport_mode,unique;type:text;not null;default:ALL"` // Single | SGP | SGP+ | ALL
 	Wins      int       `gorm:"not null;default:0"`
 	Losses    int       `gorm:"not null;default:0"`
 	Pushes    int       `gorm:"not null;default:0"`
@@ -252,8 +253,8 @@ func handlePastBetResult(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// update aggregates
-		if err := upsertUserModelStat(DB, userKey, rec.Model, rec.Sport, prev, res, prevUnits, newUnits); err != nil {
+		// update aggregates: per-mode (rec.Type) and ALL
+		if err := upsertUserModelStat(DB, userKey, rec.Model, rec.Sport, rec.Type, prev, res, prevUnits, newUnits); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "stats update error")
 			return
 		}
