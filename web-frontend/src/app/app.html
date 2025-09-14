@@ -17,9 +17,13 @@
       <mat-icon>account_circle</mat-icon>
     </button>
 
-    <!-- Solid menu panel -->
-    <mat-menu #accountMenu="matMenu" panelClass="solid-menu">
-      <!-- Header row: non-interactive, not grey -->
+    <!-- keep BOTH attrs to cover different Material versions -->
+    <mat-menu #accountMenu="matMenu" panelClass="solid-menu" overlayPanelClass="solid-menu">
+
+      <!-- OPAQUE BACKGROUND LAYER (not focusable / not clickable) -->
+      <div class="menu-solid-bg" aria-hidden="true"></div>
+
+      <!-- Header row -->
       <div mat-menu-item class="user-item" (click)="$event.stopPropagation()" tabindex="-1">
         <mat-icon>person</mat-icon>
         <span>{{ auth.user()?.displayName || auth.user()?.email }}</span>
@@ -27,7 +31,6 @@
 
       <mat-divider></mat-divider>
 
-      <!-- Signed-in user -->
       <button mat-menu-item (click)="onSignOut()">
         <mat-icon>logout</mat-icon>
         <span>Sign out</span>
