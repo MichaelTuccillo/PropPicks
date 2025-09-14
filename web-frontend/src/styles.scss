@@ -192,3 +192,53 @@ body:not(.dark-theme) .cdk-overlay-container .cdk-overlay-pane .solid-menu.mdc-m
   background-color: #ffffff !important;
 }
 
+/* ===== MAKE MAT-MENU 100% SOLID (override inline vars) ===== */
+
+/* Target the real overlay element Material renders */
+.cdk-overlay-container .cdk-overlay-pane > .mat-mdc-menu-panel.solid-menu {
+  /* Overwrite MDC/Material vars that may be set inline with alpha */
+  --mat-menu-container-color: var(--surface) !important;
+  --mdc-theme-surface: var(--surface) !important;
+  --mat-sys-surface: var(--surface) !important;
+
+  /* Kill any translucency / blur */
+  background: var(--surface) !important;
+  background-color: var(--surface) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  opacity: 1 !important;
+  box-shadow: var(--shadow);
+}
+
+/* Dark mode: same but using your dark tokens */
+body.dark .cdk-overlay-container .cdk-overlay-pane > .mat-mdc-menu-panel.solid-menu {
+  --mat-menu-container-color: var(--surface) !important;
+  --mdc-theme-surface: var(--surface) !important;
+  --mat-sys-surface: var(--surface) !important;
+
+  background: var(--surface) !important;
+  background-color: var(--surface) !important;
+}
+
+/* Ensure the inner content doesn't add a translucent layer back */
+.cdk-overlay-container .cdk-overlay-pane .mat-mdc-menu-panel.solid-menu .mat-mdc-menu-content {
+  background: transparent !important;
+}
+
+/* High-contrast text inside the menu (no grey) */
+.cdk-overlay-container .cdk-overlay-pane .mat-mdc-menu-panel.solid-menu .mdc-list-item__primary-text,
+.cdk-overlay-container .cdk-overlay-pane .mat-mdc-menu-panel.solid-menu .mat-icon {
+  color: var(--text) !important;
+  opacity: 1 !important;
+}
+
+/* Tight vertical spacing */
+.cdk-overlay-container .cdk-overlay-pane .mat-mdc-menu-panel.solid-menu .mdc-list-item {
+  min-height: 34px;
+  padding: 2px 12px;
+}
+.cdk-overlay-container .cdk-overlay-pane .mat-mdc-menu-panel.solid-menu .mat-divider {
+  margin: 4px 0;
+  opacity: .22;
+  border-color: color-mix(in oklab, var(--text) 40%, transparent);
+}

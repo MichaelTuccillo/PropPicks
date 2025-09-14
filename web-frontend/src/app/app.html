@@ -4,10 +4,10 @@
 
   <span class="spacer"></span>
 
-  <!-- When signed in-->
+  <!-- When signed in -->
   <ng-container *ngIf="auth.isAuthed(); else guest">
     <a mat-button routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
-    <a mat-button routerLink="/generate"  routerLinkActive="active">Generate</a>
+    <a mat-button routerLink="/generate" routerLinkActive="active">Generate</a>
 
     <!-- Account icon opens menu -->
     <button
@@ -17,10 +17,18 @@
       <mat-icon>account_circle</mat-icon>
     </button>
 
-    <!-- SOLID menu panel -->
+    <!-- Solid menu panel -->
     <mat-menu #accountMenu="matMenu" panelClass="solid-menu">
+      <!-- Header row: non-interactive, not grey -->
+      <div mat-menu-item class="user-item" (click)="$event.stopPropagation()" tabindex="-1">
+        <mat-icon>person</mat-icon>
+        <span>{{ auth.user()?.displayName || auth.user()?.email }}</span>
+      </div>
+
+      <mat-divider></mat-divider>
+
       <!-- Signed-in user -->
-      <button mat-menu-item *ngIf="auth.isAuthed()" (click)="onSignOut()">
+      <button mat-menu-item (click)="onSignOut()">
         <mat-icon>logout</mat-icon>
         <span>Sign out</span>
       </button>

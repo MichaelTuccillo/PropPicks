@@ -18,7 +18,8 @@ import { MatDividerModule } from '@angular/material/divider';
   standalone: true,
   imports: [
     RouterOutlet, RouterLink, RouterLinkActive, NgIf,
-    MatToolbarModule, MatButtonModule, MatIconModule, MatMenuModule
+    MatToolbarModule, MatButtonModule, MatIconModule, MatMenuModule,
+    MatDividerModule
   ],
   templateUrl: './app.html',
 })
@@ -47,5 +48,4 @@ export class AppComponent {
       }
     }
   }
-
 }

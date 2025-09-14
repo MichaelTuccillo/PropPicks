@@ -1,7 +1,103 @@
+/* ---- Account dropdown: solid background, full-contrast text, compact spacing ---- */
+.solid-menu .mdc-menu-surface {
+  /* Solid background (override any transparency) */
+  background-color: #0d1420;
+  color: #e9edf3;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+  backdrop-filter: none;
+}
+
+/* Ensure menu text/icons are not greyed out */
+.solid-menu .mdc-list-item__primary-text,
+.solid-menu .mat-icon {
+  color: inherit;
+  opacity: 1;
+}
+
+/* Compact vertical rhythm */
+.solid-menu .mdc-list-item {
+  min-height: 36px;     /* default ~48px */
+  padding: 4px 12px;
+}
+
+/* Header row look (non-interactive, bolder) */
+.solid-menu .user-item {
+  cursor: default;
+  font-weight: 600;
+}
+
+/* Icon sizing + spacing for tighter layout */
+.solid-menu .mdc-list-item .mat-icon {
+  margin-right: 8px;
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
+}
+
+/* Divider closer & subtler */
+.solid-menu .mat-divider {
+  margin: 4px 0;
+  opacity: 1;
+  border-color: currentColor;
+}
+
+/* ---- Existing header styles ---- */
 .logo {
   font-weight: 800;
   letter-spacing: .3px;
-  font-size: 21px;   /* was smaller; bump size */
+  font-size: 21px;
   line-height: 1;
 }
 .spacer { flex: 1 1 auto; }
+
+/* ===== MAKE MAT-MENU 100% SOLID (override inline vars) ===== */
+
+/* Target the real overlay element Material renders */
+.cdk-overlay-container .cdk-overlay-pane > .mat-mdc-menu-panel.solid-menu {
+  /* Overwrite MDC/Material vars that may be set inline with alpha */
+  --mat-menu-container-color: var(--surface) !important;
+  --mdc-theme-surface: var(--surface) !important;
+  --mat-sys-surface: var(--surface) !important;
+
+  /* Kill any translucency / blur */
+  background: var(--surface) !important;
+  background-color: var(--surface) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  opacity: 1 !important;
+  box-shadow: var(--shadow);
+}
+
+/* Dark mode: same but using your dark tokens */
+body.dark .cdk-overlay-container .cdk-overlay-pane > .mat-mdc-menu-panel.solid-menu {
+  --mat-menu-container-color: var(--surface) !important;
+  --mdc-theme-surface: var(--surface) !important;
+  --mat-sys-surface: var(--surface) !important;
+
+  background: var(--surface) !important;
+  background-color: var(--surface) !important;
+}
+
+/* Ensure the inner content doesn't add a translucent layer back */
+.cdk-overlay-container .cdk-overlay-pane .mat-mdc-menu-panel.solid-menu .mat-mdc-menu-content {
+  background: transparent !important;
+}
+
+/* High-contrast text inside the menu (no grey) */
+.cdk-overlay-container .cdk-overlay-pane .mat-mdc-menu-panel.solid-menu .mdc-list-item__primary-text,
+.cdk-overlay-container .cdk-overlay-pane .mat-mdc-menu-panel.solid-menu .mat-icon {
+  color: var(--text) !important;
+  opacity: 1 !important;
+}
+
+/* Tight vertical spacing */
+.cdk-overlay-container .cdk-overlay-pane .mat-mdc-menu-panel.solid-menu .mdc-list-item {
+  min-height: 34px;
+  padding: 2px 12px;
+}
+.cdk-overlay-container .cdk-overlay-pane .mat-mdc-menu-panel.solid-menu .mat-divider {
+  margin: 4px 0;
+  opacity: .22;
+  border-color: color-mix(in oklab, var(--text) 40%, transparent);
+}
