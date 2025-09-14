@@ -4,7 +4,7 @@
 
     <!-- Sport -->
     <div class="row">
-      <mat-form-field appearance="outline" class="full">
+      <mat-form-field appearance="outline" class="full compact">
         <mat-label>Sport*</mat-label>
         <mat-select [value]="sport()" (valueChange)="setSport($event)">
           <mat-option *ngFor="let s of sports" [value]="s">{{ s }}</mat-option>
@@ -15,32 +15,35 @@
     <!-- Games (range within next 7 days) -->
     <div class="row games-section" *ngIf="sport()">
       <div class="full">
-        <div class="models-head" style="align-items:center;">
+        <div class="models-head with-bottom-gap">
           <h3 class="sub">Games</h3>
+        </div>
 
-          <div class="actions day-filters" style="gap:16px; align-items:center;">
-            <mat-form-field appearance="outline" class="day-filter">
-              <mat-label>From</mat-label>
-              <mat-select [value]="startOffset()" (valueChange)="setStartOffset($event)">
-                <mat-option *ngFor="let opt of dayChoices(); trackBy: trackChoice" [value]="opt.value">
-                  {{ opt.label }}
-                </mat-option>
-              </mat-select>
-            </mat-form-field>
+        <!-- Date filters + controls -->
+        <div class="day-filters compact">
+          <mat-form-field appearance="outline" class="day-filter compact">
+            <mat-label>From</mat-label>
+            <mat-select [value]="startOffset()" (valueChange)="setStartOffset($event)">
+              <mat-option *ngFor="let opt of dayChoices(); trackBy: trackChoice" [value]="opt.value">
+                {{ opt.label }}
+              </mat-option>
+            </mat-select>
+          </mat-form-field>
 
-            <mat-form-field appearance="outline" class="day-filter">
-              <mat-label>To</mat-label>
-              <mat-select [value]="endOffset()" (valueChange)="setEndOffset($event)">
-                <mat-option *ngFor="let opt of dayChoices(); trackBy: trackChoice"
-                            [value]="opt.value" [disabled]="opt.value < startOffset()">
-                  {{ opt.label }}
-                </mat-option>
-              </mat-select>
-            </mat-form-field>
+          <mat-form-field appearance="outline" class="day-filter compact">
+            <mat-label>To</mat-label>
+            <mat-select [value]="endOffset()" (valueChange)="setEndOffset($event)">
+              <mat-option *ngFor="let opt of dayChoices(); trackBy: trackChoice"
+                          [value]="opt.value" [disabled]="opt.value < startOffset()">
+                {{ opt.label }}
+              </mat-option>
+            </mat-select>
+          </mat-form-field>
 
-            <a (click)="loadGames()">Refresh</a>
-            <a (click)="selectAllVisible()" *ngIf="groupedGames()?.length">Select all</a>
-            <a (click)="clearVisible()" *ngIf="groupedGames()?.length">Clear</a>
+          <div class="day-controls">
+            <a class="ghost-btn" (click)="loadGames()">Refresh</a>
+            <a class="ghost-btn" (click)="selectAllVisible()" *ngIf="groupedGames()?.length">Select all</a>
+            <a class="ghost-btn" (click)="clearVisible()" *ngIf="groupedGames()?.length">Clear</a>
           </div>
         </div>
 
@@ -49,7 +52,7 @@
 
         <ng-container *ngIf="!gamesLoading() && groupedGames()?.length">
           <div class="game-day" *ngFor="let day of groupedGames(); trackBy: trackDay">
-            <div class="day-head">
+            <div class="day-head compact-gap">
               <div class="day-title">{{ day.label }}</div>
               <div class="day-actions">
                 <a (click)="selectDay(day.dateKey)">Select day</a>
@@ -93,9 +96,17 @@
             <mat-button-toggle value="SGP+">SGP+</mat-button-toggle>
           </mat-button-toggle-group>
 
-          <mat-form-field appearance="outline" class="legs-inline" *ngIf="mode()!=='Single'">
+          <!-- Legs input shown only for SGP / SGP+; min 2 -->
+          <mat-form-field appearance="outline" class="legs-inline compact" *ngIf="mode()!=='Single'">
             <mat-label>Legs</mat-label>
-            <input matInput type="number" [value]="legs()" (input)="onLegsInput($event)">
+            <input
+              matInput
+              type="number"
+              [attr.min]="2"
+              step="1"
+              [value]="legs()"
+              (input)="onLegsInput($event)"
+            >
           </mat-form-field>
         </div>
       </div>
@@ -111,35 +122,64 @@
 
     <!-- Odds -->
     <div class="row">
-      <mat-form-field appearance="outline" class="half">
+      <mat-form-field appearance="outline" class="half compact">
         <mat-label>Min odds (American)</mat-label>
-        <input matInput type="number" [attr.step]="5" [value]="minOdds()" (input)="onOddsInput('min', $event)" />
+        <input
+          matInput
+          type="number"
+          [attr.step]="5"
+          [value]="minOddsText()"
+          (input)="onOddsInput('min', $event)"
+          (blur)="onOddsBlur('min', $event)"
+        />
         <mat-error *ngIf="oddsInvalid('min')">Odds cannot be between −100 and +100.</mat-error>
       </mat-form-field>
 
-      <mat-form-field appearance="outline" class="half">
+      <mat-form-field appearance="outline" class="half compact">
         <mat-label>Max odds (American)</mat-label>
-        <input matInput type="number" [attr.step]="5" [value]="maxOdds()" (input)="onOddsInput('max', $event)" />
+        <input
+          matInput
+          type="number"
+          [attr.step]="5"
+          [value]="maxOddsText()"
+          (input)="onOddsInput('max', $event)"
+          (blur)="onOddsBlur('max', $event)"
+        />
         <mat-error *ngIf="oddsInvalid('max')">Odds cannot be between −100 and +100.</mat-error>
       </mat-form-field>
     </div>
 
-    <!-- Models -->
-    <div class="row models-head">
+    <!-- Models (single-select) -->
+    <div class="row models-head with-bottom-gap">
       <h3 class="sub">Models</h3>
       <div class="actions">
-        <a (click)="selectAllModels()">Select all</a>
         <a (click)="clearModels()">Clear</a>
       </div>
     </div>
 
-    <div class="row checks">
+    <div class="row checks compact-gap">
       <label class="check" *ngFor="let m of models(); trackBy: trackModel">
         <mat-checkbox
           [checked]="selectedIds().has(m.id)"
-          (change)="toggleModel(m.id, $event.checked)">
+          (change)="setExclusiveModel(m.id, $event.checked)">
         </mat-checkbox>
-        <span>{{ m.name }}</span>
+
+        <span class="model-label">
+          {{ m.name }}
+          <mat-icon
+            class="info"
+            [matTooltip]="getModelDesc(m)"
+            matTooltipClass="model-tip"
+            [matTooltipPosition]="'above'"
+            matTooltipShowDelay="150"
+            matTooltipHideDelay="0"
+            (click)="$event.stopPropagation()"
+            (mousedown)="$event.stopPropagation()"
+            (touchstart)="$event.stopPropagation()"
+            aria-label="Model info"
+            tabindex="0"
+          >info</mat-icon>
+        </span>
       </label>
     </div>
 
@@ -167,26 +207,7 @@
     </div>
   </mat-card>
 
-  <!-- (Optional) Mock generator results block left as-is -->
-  <mat-card class="panel" *ngIf="slipsOut() as slips">
-    <div class="results">
-      <h3 class="sub">Generated slips</h3>
-      <div class="slip" *ngFor="let s of slips; index as i">
-        <div class="head">Slip {{ i+1 }} — {{ s.odds }} ({{ s.legs.length }} legs)</div>
-        <ul class="legs">
-          <li *ngFor="let l of s.legs; index as j">
-            {{ j+1 }}) {{ l.player }} — {{ l.market }} {{ getSelection(l) }} ({{ l.odds }})
-          </li>
-        </ul>
-        <div class="why" *ngIf="s.rationale?.length">
-          <div class="muted">Why:</div>
-          <ul><li *ngFor="let r of s.rationale">{{ r }}</li></ul>
-        </div>
-      </div>
-    </div>
-  </mat-card>
-
-  <!-- AI result with editable odds + Save/Discard -->
+  <!-- AI result with editable odds + editable stake + Save/Discard -->
   <mat-card class="panel" *ngIf="aiSlip() as s">
     <div class="results">
       <h3 class="sub">AI Bet Slip</h3>
@@ -208,16 +229,41 @@
           </li>
         </ul>
 
-        <!-- Editable odds -->
+        <!-- Editable odds + stake (same behavior as filter odds; stake > 0) -->
         <div class="edit-odds">
-          <mat-form-field appearance="outline" class="full" *ngIf="mode()!=='Single'">
-            <mat-label>Total odds (American)</mat-label>
-            <input matInput type="text" [value]="editableOdds()" (input)="onEditableOddsInput($event)" placeholder="+700">
+          <mat-form-field appearance="outline" class="half compact" *ngIf="mode()==='Single'">
+            <mat-label>Odds (American)</mat-label>
+            <input
+              matInput
+              type="text"
+              [attr.step]="5"
+              [value]="editableOdds()"
+              (input)="onSlipOddsInput($event)"
+              (blur)="onSlipOddsBlur($event)"
+            >
           </mat-form-field>
 
-          <mat-form-field appearance="outline" class="full" *ngIf="mode()==='Single'">
-            <mat-label>Odds (American)</mat-label>
-            <input matInput type="text" [value]="editableOdds()" (input)="onEditableOddsInput($event)" placeholder="-115">
+          <mat-form-field appearance="outline" class="half compact" *ngIf="mode()!=='Single'">
+            <mat-label>Total odds (American)</mat-label>
+            <input
+              matInput
+              type="text"
+              [attr.step]="5"
+              [value]="editableOdds()"
+              (input)="onSlipOddsInput($event)"
+              (blur)="onSlipOddsBlur($event)"
+            >
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="half compact">
+            <mat-label>Stake (units)</mat-label>
+            <input
+              matInput
+              type="text"
+              [value]="unitsText()"
+              (input)="onUnitsInput($event)"
+              (blur)="onUnitsBlur($event)"
+            >
           </mat-form-field>
         </div>
 

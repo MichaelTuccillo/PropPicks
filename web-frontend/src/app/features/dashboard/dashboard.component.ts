@@ -143,11 +143,27 @@ export class DashboardComponent {
     });
   });
 
+  /** Whether we have any graded bets to plot (last 15 for current mode & selected models) */
+  hasRecentChartData = computed<boolean>(() => {
+    const list = this.bets() ?? [];
+    const currentMode = this.mode();
+    const allowedLC = new Set<string>(Array.from(this.selectedIds()).map(s => s.toLowerCase()));
+
+    const graded = list.filter(b => {
+      if (!b || !b.result || (b.result !== 'win' && b.result !== 'loss' && b.result !== 'push')) return false;
+      if (b.type !== currentMode) return false;
+      return allowedLC.has((b.model || '').toLowerCase());
+    });
+
+    graded.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const last15 = graded.slice(-15);
+    return last15.length > 0;
+  });
+
   /** Cumulative Units (Last 15 graded bets across selected models) */
   lineCfg = computed<ChartConfiguration<'line'>>(() => {
     const list = this.bets() ?? [];
     const currentMode = this.mode();
-
     const allowedLC = new Set<string>(Array.from(this.selectedIds()).map(s => s.toLowerCase()));
 
     const graded = list.filter(b => {

@@ -15,7 +15,20 @@
 }
 
 /* Sections are block-level and should take full width of the .page container */
-.section { width: 100%; }
+.section {
+  width: 100%;
+  margin: 16px 0; /* add vertical breathing room between blocks */
+}
+
+/* Add a little extra space between consecutive sections (e.g., chart -> table) */
+.section + .section {
+  margin-top: 20px;
+}
+
+.section-title {
+  margin: 0 0 8px 0;
+  font-weight: 700;
+}
 
 /* If the page happens to be a CSS grid, make .full span the entire row */
 .full { grid-column: 1 / -1; }
@@ -29,6 +42,7 @@
 
 /* Chart container + canvas fill */
 .chart-wrap {
+  position: relative;           /* enable overlay positioning */
   width: 100%;
   height: 320px;                /* tweak as you like */
   padding: 8px 8px 0;
@@ -41,6 +55,18 @@
   width: 100% !important;       /* let Chart.js use all horizontal space */
   height: 100% !important;      /* fill the fixed container height */
   display: block;
+}
+
+/* Centered overlay text when there is no data */
+.chart-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: var(--muted, #6b7280);
+  pointer-events: none; /* make sure clicks pass through to the canvas when present */
 }
 
 /* Demo banner */
@@ -70,6 +96,13 @@
 
 .summary-title {
   font-weight: 700;
+  margin-bottom: .25rem; /* tightened to make room for the meta line */
+}
+
+/* Descriptor under the card title to clarify scope */
+.summary-meta {
+  font-size: 12px;
+  color: var(--muted, #6b7280);
   margin-bottom: .35rem;
 }
 

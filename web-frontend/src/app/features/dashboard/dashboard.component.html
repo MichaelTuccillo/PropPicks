@@ -15,14 +15,19 @@
     </mat-button-toggle-group>
   </div>
 
-  <!-- Summary cards (W-L and Units only) -->
+  <!-- Summary cards (All-time W-L and ROI) -->
   <div class="summary-grid" *ngIf="summaries().length">
     <mat-card class="summary-card" *ngFor="let c of summaries(); trackBy: trackModel">
       <div class="summary-title">{{ c.name }}</div>
+      <div class="summary-meta">All-time W-L & ROI</div>
       <mat-chip-set class="meta-chips">
-        <mat-chip class="wl-chip">{{ c.all_wl }}</mat-chip>
-        <mat-chip class="units-chip" [ngClass]="{ 'pos': c.all_units >= 0, 'neg': c.all_units < 0 }">
-          Units {{ c.all_units_str }}
+        <mat-chip class="wl-chip" aria-label="All-time wins and losses">{{ c.all_wl }}</mat-chip>
+        <mat-chip
+          class="units-chip"
+          [ngClass]="{ 'pos': c.all_units >= 0, 'neg': c.all_units < 0 }"
+          aria-label="All-time ROI in units"
+        >
+          ROI {{ c.all_units_str }}
         </mat-chip>
       </mat-chip-set>
     </mat-card>
@@ -32,75 +37,84 @@
   <div class="section">
     <h3>Cumulative Units (Last 15)</h3>
     <div class="chart-wrap" *ngIf="isBrowser">
+      <!-- Canvas always present so height stays consistent -->
       <canvas
         baseChart
         [data]="lineCfg().data"
         [options]="lineCfg().options"
         [type]="lineCfg().type">
       </canvas>
+
+      <!-- Empty state overlay when no recent bets -->
+      <div class="chart-empty" *ngIf="!hasRecentChartData()">
+        No recent bets to display
+      </div>
     </div>
   </div>
 
   <!-- Recent bets table -->
-  <table mat-table [dataSource]="recent()" class="mat-elevation-z1 w-full">
-    <!-- Date -->
-    <ng-container matColumnDef="date">
-      <th mat-header-cell *matHeaderCellDef>Date</th>
-      <td mat-cell *matCellDef="let row">{{ row.date | date:'MMM d, y, h:mm a' }}</td>
-    </ng-container>
+  <div class="section">
+    <h3 class="section-title">Recent Bets</h3>
+    <table mat-table [dataSource]="recent()" class="mat-elevation-z1 w-full">
+      <!-- Date -->
+      <ng-container matColumnDef="date">
+        <th mat-header-cell *matHeaderCellDef>Date</th>
+        <td mat-cell *matCellDef="let row">{{ row.date | date:'MMM d, y, h:mm a' }}</td>
+      </ng-container>
 
-    <!-- Model -->
-    <ng-container matColumnDef="model">
-      <th mat-header-cell *matHeaderCellDef>Model</th>
-      <td mat-cell *matCellDef="let row">{{ row.modelName }}</td>
-    </ng-container>
+      <!-- Model -->
+      <ng-container matColumnDef="model">
+        <th mat-header-cell *matHeaderCellDef>Model</th>
+        <td mat-cell *matCellDef="let row">{{ row.modelName }}</td>
+      </ng-container>
 
-    <!-- Sport -->
-    <ng-container matColumnDef="sport">
-      <th mat-header-cell *matHeaderCellDef>Sport</th>
-      <td mat-cell *matCellDef="let row">{{ row.sport }}</td>
-    </ng-container>
+      <!-- Sport -->
+      <ng-container matColumnDef="sport">
+        <th mat-header-cell *matHeaderCellDef>Sport</th>
+        <td mat-cell *matCellDef="let row">{{ row.sport }}</td>
+      </ng-container>
 
-    <!-- Event -->
-    <ng-container matColumnDef="event">
-      <th mat-header-cell *matHeaderCellDef>Event</th>
-      <td mat-cell *matCellDef="let row">{{ row.event }}</td>
-    </ng-container>
+      <!-- Event -->
+      <ng-container matColumnDef="event">
+        <th mat-header-cell *matHeaderCellDef>Event</th>
+        <td mat-cell *matCellDef="let row">{{ row.event }}</td>
+      </ng-container>
 
-    <!-- Type -->
-    <ng-container matColumnDef="type">
-      <th mat-header-cell *matHeaderCellDef>Type</th>
-      <td mat-cell *matCellDef="let row">{{ row.betType }}</td>
-    </ng-container>
+      <!-- Type -->
+      <ng-container matColumnDef="type">
+        <th mat-header-cell *matHeaderCellDef>Type</th>
+        <td mat-cell *matCellDef="let row">{{ row.betType }}</td>
+      </ng-container>
 
-    <!-- Odds -->
-    <ng-container matColumnDef="odds">
-      <th mat-header-cell *matHeaderCellDef>Odds</th>
-      <td mat-cell *matCellDef="let row">{{ row.combinedOdds }}</td>
-    </ng-container>
+      <!-- Odds -->
+      <ng-container matColumnDef="odds">
+        <th mat-header-cell *matHeaderCellDef>Odds</th>
+        <td mat-cell *matCellDef="let row">{{ row.combinedOdds }}</td>
+      </ng-container>
 
-    <!-- Grade controls -->
-    <ng-container matColumnDef="grade">
-      <th mat-header-cell *matHeaderCellDef>Grade</th>
-      <td mat-cell *matCellDef="let row">
-        <mat-chip-set class="grade-set">
-          <mat-chip class="grade-chip win"  [class.is-selected]="row.result === 'win'"  (click)="grade(row, 'win')"  selectable="false">Win</mat-chip>
-          <mat-chip class="grade-chip loss" [class.is-selected]="row.result === 'loss'" (click)="grade(row, 'loss')" selectable="false">Loss</mat-chip>
-          <mat-chip class="grade-chip push" [class.is-selected]="row.result === 'push'" (click)="grade(row, 'push')" selectable="false">Push</mat-chip>
-          <mat-chip class="grade-chip clear"[class.is-selected]="!row.result"       (click)="grade(row, '')"      selectable="false">Clear</mat-chip>
-        </mat-chip-set>
-      </td>
-    </ng-container>
+      <!-- Grade controls -->
+      <ng-container matColumnDef="grade">
+        <th mat-header-cell *matHeaderCellDef>Grade</th>
+        <td mat-cell *matCellDef="let row">
+          <mat-chip-set class="grade-set">
+            <mat-chip class="grade-chip win"  [class.is-selected]="row.result === 'win'"  (click)="grade(row, 'win')"  selectable="false">Win</mat-chip>
+            <mat-chip class="grade-chip loss" [class.is-selected]="row.result === 'loss'" (click)="grade(row, 'loss')" selectable="false">Loss</mat-chip>
+            <mat-chip class="grade-chip push" [class.is-selected]="row.result === 'push'" (click)="grade(row, 'push')" selectable="false">Push</mat-chip>
+            <mat-chip class="grade-chip clear"[class.is-selected]="!row.result"       (click)="grade(row, '')"      selectable="false">Clear</mat-chip>
+          </mat-chip-set>
+        </td>
+      </ng-container>
 
-    <!-- Result units -->
-    <ng-container matColumnDef="result">
-      <th mat-header-cell *matHeaderCellDef>Result</th>
-      <td mat-cell *matCellDef="let row">
-        <span [ngClass]="resultClass(row)">{{ formatUnits(row) }}</span>
-      </td>
-    </ng-container>
+      <!-- Result units -->
+      <ng-container matColumnDef="result">
+        <th mat-header-cell *matHeaderCellDef>Result</th>
+        <td mat-cell *matCellDef="let row">
+          <span [ngClass]="resultClass(row)">{{ formatUnits(row) }}</span>
+        </td>
+      </ng-container>
 
-    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-    <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-  </table>
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+    </table>
+  </div>
 </div>

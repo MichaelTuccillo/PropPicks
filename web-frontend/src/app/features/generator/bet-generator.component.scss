@@ -1,26 +1,33 @@
+/* Restore original outer spacing */
 .page { padding: 24px; max-width: 1240px; margin: 0 auto; }
+
 .panel {
-  padding: 16px;
+  padding: 16px; /* back to original */
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: linear-gradient(180deg, var(--surface), var(--surface-2));
   box-shadow: var(--shadow);
 }
 
+/* add a gap between the filter panel and the AI slip panel */
+.panel + .panel { margin-top: 18px; }
+
 .h { margin: 0 0 12px; }
 .sub { margin: 0; }
 .muted { color: var(--muted); }
 
-.row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+/* ---- Main section spacing restored ---- */
+.row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 15px; }
+
 .full { flex: 1 1 100%; }
 .half { flex: 1 1 480px; min-width: 280px; }
 
 .field-label { display: block; margin-bottom: 8px; color: var(--muted); }
 
-/* Presets inline + a bit more spacing */
+/* Presets */
 .presets-inline {
-  display: flex; align-items: center; gap: 14px; /* increased from 8px */
-  margin: 6px 0 6px;
+  display: flex; align-items: center; gap: 14px;
+  margin: 6px 0 15px;
 }
 .presets-inline .muted { margin-right: 4px; }
 .preset-btn.mat-mdc-button-base { height: 28px; padding: 0 12px; }
@@ -28,11 +35,75 @@
   font-size: 12px; font-weight: 600; letter-spacing: .3px;
 }
 
-/* Models */
-.models-head { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+/* ---- Tighten header → content gaps ---- */
+.models-head { display: flex; align-items: center; justify-content: space-between; }
+.models-head.with-bottom-gap { margin-bottom: 6px; } /* tighter than default */
+
 .actions a { margin-left: 16px; cursor: pointer; }
-.checks { display: flex; flex-wrap: wrap; gap: 18px 28px; margin-top: 8px; }
-.check { display: flex; align-items: center; gap: 8px; }
+.checks { display: flex; flex-wrap: wrap; gap: 15px 15px; }
+.checks.compact-gap { margin-top: 4px; } /* was 8px+; now tighter */
+.check { display: flex; align-items: center; gap: 5px; }
+
+/* Tooltip styling for multi-line content */
+.model-label { display: inline-flex; align-items: center; gap: 2px; cursor: help; }
+.model-label .info { font-size: 15px; opacity: 0.75; }
+
+/* ===== Solid, readable tooltip (CDK overlay) ===== */
+/* Override M3 tooltip design tokens to a solid card color */
+.cdk-overlay-container .mat-mdc-tooltip {
+  --mdc-plain-tooltip-container-color: #0b1220; /* solid, no alpha */
+  --mdc-plain-tooltip-supporting-text-color: #f8fafc;
+}
+/* Hard fallback (higher specificity & !important) */
+.cdk-overlay-container .mat-mdc-tooltip .mdc-tooltip__surface {
+  background: #0b1220 !important;
+  color: #f8fafc !important;
+  white-space: normal;
+  word-break: break-word;
+  max-width: 520px;
+  padding: 12px 14px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  letter-spacing: 0.1px;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 10px;
+  box-shadow: 0 14px 34px rgba(0,0,0,0.55);
+  backdrop-filter: none;
+}
+/* Optional arrow when tooltip is above */
+.cdk-overlay-container .mat-mdc-tooltip .mdc-tooltip__surface::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 24px;
+  border-width: 8px 8px 0 8px;
+  border-style: solid;
+  border-color: #0b1220 transparent transparent transparent;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3));
+}
+
+:host ::ng-deep .mat-mdc-tooltip.model-tip {
+  z-index: 10000; /* ensure on top of overlays */
+}
+:host ::ng-deep .mat-mdc-tooltip.model-tip .mdc-tooltip__surface {
+  white-space: normal;            /* allow wrapping */
+  word-break: break-word;         /* avoid overflow on long tokens */
+  max-width: 520px;               /* wider bubble */
+  padding: 12px 14px;             /* more breathing room */
+  font-size: 13.5px;              /* larger text */
+  line-height: 1.5;               /* easier to read */
+  letter-spacing: 0.1px;
+
+  /* Solid, high-contrast card background */
+  background: #0b1220 !important;           /* SOLID dark */
+  color: #f8fafc !important;                /* near-white text */
+  border: 1px solid rgba(255,255,255,0.16); /* subtle outline */
+  border-radius: 10px;
+  box-shadow: 0 14px 34px rgba(0,0,0,0.55);
+
+  /* Prevent the page text from showing through on some GPUs */
+  backdrop-filter: none;
+}
 
 /* Right-aligned, borderless CTA row */
 .cta-row {
@@ -75,26 +146,61 @@
 }
 
 /* Games section */
-.games-section { margin-top: 8px; }
+.games-section { margin-top: -10px; }
+.game-day { margin-top: 5px; }
 
-.game-day { margin-top: 12px; }
-
+/* Tighter gap under day header */
 .day-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 0;
+  padding: 1px 0;
   border-bottom: 1px solid rgba(255,255,255,0.06);
-  margin-bottom: 10px;
 }
+.day-head.compact-gap { margin-bottom: 8px; } /* tighter */
 
-.day-title {
-  font-weight: 600;
-  opacity: .95;
-}
-
+.day-title { font-weight: 600; opacity: .95; }
 .day-actions a { margin-left: 16px; cursor: pointer; }
 
+/* Filters row under the "Games" title */
+.day-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 6px 0 6px 0;
+  align-items: center;           /* center the links with the selects */
+}
+
+/* ---- Smaller form controls (sport, odds, date) ---- */
+.day-filter { width: 150px; margin-right: 6px; margin-top: 10px; margin-bottom: 0px;}
+
+/* Compact Material form-field tweaks (works for mat-select + mat-input) */
+.compact .mat-mdc-form-field-infix {
+  padding-top: 7px !important;
+  padding-bottom: 4px !important;
+  padding-left: 8px;
+  min-height: 34px;              /* shorter control height */
+}
+.compact .mat-mdc-form-field-subscript-wrapper { display: none; }
+.compact .mat-mdc-select-trigger { min-height: 24px; }
+
+/* Inline day controls styled like light ghost buttons and vertically centered */
+.day-controls { display: flex; align-items: center; gap: 10px; }
+.ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;                  /* match compact field height */
+  padding: 0 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: inherit;
+}
+.ghost-btn:hover {
+  background: rgba(255,255,255,0.06);
+  text-decoration: none;
+}
+
+/* Games list */
 .game-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
@@ -127,13 +233,7 @@
   white-space: nowrap;
 }
 
-.day-filter {
-  width: 210px;
-  margin-right: 8px;
-}
-
+/* Bet type row */
 .bettype-inline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.legs-inline { width: 140px; }
-.edit-odds { margin-top: 12px; }
-.day-filters { display: flex; flex-wrap: wrap; }
-.day-filter  { width: 180px; margin-right: 8px; }
+.legs-inline { width: 120px; }
+.edit-odds { margin-top: 12px; margin-bottom: 12px;}

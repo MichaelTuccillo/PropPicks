@@ -17,7 +17,11 @@ export class GamesService {
   constructor(private http: HttpClient) {}
 
   listGames(sport: string, days = 7): Observable<{ games: GameDTO[] }> {
-    const params = new HttpParams().set('sport', sport).set('days', days);
+    // Serialize days explicitly as string (prevents any TS/overload quirks)
+    const params = new HttpParams()
+      .set('sport', sport)
+      .set('days', String(days));
+
     return this.http.get<{ games: GameDTO[] }>(`${this.base}/games`, { params });
   }
 }

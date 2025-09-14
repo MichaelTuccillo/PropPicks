@@ -12,8 +12,9 @@ export type PastBet = {
   sport: string;
   event: string;
   odds: string;
+  units?: number;                 // NEW: stake (units)
   result?: 'win' | 'loss' | 'push' | '';
-  resultUnits?: number;
+  resultUnits?: number;           // +/- units for this bet’s stake
 };
 
 export type SavePastBetPayload = Omit<PastBet, 'id' | 'result' | 'resultUnits'>;
@@ -28,7 +29,7 @@ export class PastBetsService {
   list(limit: number = 15): Observable<PastBet[]> {
     const url = `${this.base}?limit=${limit}`;
     return this.http
-      .get<{ bets: PastBet[] }>(url, { withCredentials: true})
+      .get<{ bets: PastBet[] }>(url, { withCredentials: true })
       .pipe(map(r => r?.bets ?? []));
   }
 

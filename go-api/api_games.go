@@ -79,10 +79,10 @@ We query each day in the window and merge.
 type espnScoreboard struct {
 	Events []struct {
 		ID   string `json:"id"`
-		Date string `json:"date"` // often RFC3339 but sometimes missing seconds
+		Date string `json:"date"`
 
 		Competitions []struct {
-			Date        string `json:"date"` // fallback if Events[i].Date is empty/odd
+			Date        string `json:"date"`
 			Competitors []struct {
 				HomeAway string `json:"homeAway"`
 				Team     struct {
@@ -167,13 +167,11 @@ func fetchESPNGames(sportPath, sportLabel string, start, end time.Time) ([]GameD
 				}
 
 				// Robust date parsing
-				// Robust date parsing
 				t, ok := parseESPNTime(ev.Date)
 				if !ok && len(ev.Competitions) > 0 {
 					t, ok = parseESPNTime(ev.Competitions[0].Date)
 				}
 				if !ok {
-					// Skip but keep going; log once per event
 					hadErr = true
 					compDate := ""
 					if len(ev.Competitions) > 0 {
@@ -184,8 +182,12 @@ func fetchESPNGames(sportPath, sportLabel string, start, end time.Time) ([]GameD
 					continue
 				}
 
-
+				// Convert to UTC and skip games that already started relative to 'start'
 				t = t.UTC()
+				if t.Before(start) {
+					continue
+				}
+
 				label := fmt.Sprintf("%s @ %s — %s", away, home, t.Format("Mon 01/02 3:04 PM MST"))
 				byID[ev.ID] = GameDTO{
 					ID:    ev.ID,

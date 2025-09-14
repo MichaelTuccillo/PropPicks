@@ -20,9 +20,10 @@ type PastBet struct {
 	Model       string  `json:"model"`
 	Sport       string  `json:"sport"`
 	Event       string  `json:"event"`
-	Odds        string  `json:"odds"` // e.g., "+450" or "-115"
-	Result      string  `json:"result,omitempty"`      // "win" | "loss" | "push"
-	ResultUnits float64 `json:"resultUnits,omitempty"` // +/- units for 1u stake
+	Odds        string  `json:"odds"`                   // e.g., "+450" or "-115"
+	Units       float64 `json:"units,omitempty"`        // NEW: stake (units)
+	Result      string  `json:"result,omitempty"`       // "win" | "loss" | "push"
+	ResultUnits float64 `json:"resultUnits,omitempty"`  // +/- units for *this bet's stake*
 }
 
 /* ===================== DB models ====================== */
@@ -36,6 +37,7 @@ type PastBetRecord struct {
 	Sport       string    `gorm:"type:text;not null"`
 	Event       string    `gorm:"type:text;not null"`
 	Odds        string    `gorm:"type:text;not null"`
+	Stake       float64   `gorm:"not null;default:1"` // NEW: stake in units
 	Result      *string   `gorm:"type:text"`
 	ResultUnits *float64
 	CreatedAt   time.Time `gorm:"index:idx_past_user_date_created,priority:3;autoCreateTime"`
@@ -76,6 +78,7 @@ func toPublic(b PastBetRecord) PastBet {
 		Sport: b.Sport,
 		Event: b.Event,
 		Odds:  b.Odds,
+		Units: b.Stake, // NEW: expose stake to API
 	}
 	if b.Result != nil {
 		out.Result = *b.Result
@@ -144,6 +147,12 @@ func handlePastBets(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(bet.Date) == "" {
 			bet.Date = time.Now().UTC().Format(time.RFC3339)
 		}
+		// normalize stake
+		stake := bet.Units
+		if stake <= 0 {
+			stake = 1
+		}
+
 		id := newID()
 
 		if DB != nil {
@@ -156,6 +165,7 @@ func handlePastBets(w http.ResponseWriter, r *http.Request) {
 				Sport:   bet.Sport,
 				Event:   bet.Event,
 				Odds:    bet.Odds,
+				Stake:   stake, // NEW
 			}
 			if err := DB.Create(&rec).Error; err != nil {
 				errorJSON(w, http.StatusInternalServerError, "db insert error")
@@ -175,6 +185,7 @@ func handlePastBets(w http.ResponseWriter, r *http.Request) {
 		defer pastMu.Unlock()
 		row := bet
 		row.ID = id
+		row.Units = stake // ensure normalized stake
 		pastByUser[userKey] = append(pastByUser[userKey], row)
 		if len(pastByUser[userKey]) > 15 {
 			pastByUser[userKey] = pastByUser[userKey][len(pastByUser[userKey])-15:]
@@ -229,7 +240,7 @@ func handlePastBetResult(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// compute units delta
+		// compute units delta using the stored stake
 		prev := ""
 		if rec.Result != nil {
 			prev = *rec.Result
@@ -238,7 +249,11 @@ func handlePastBetResult(w http.ResponseWriter, r *http.Request) {
 		if rec.ResultUnits != nil {
 			prevUnits = *rec.ResultUnits
 		}
-		newUnits := unitsForOutcome(rec.Odds, res, 1.0)
+		stake := rec.Stake
+		if stake <= 0 {
+			stake = 1
+		}
+		newUnits := unitsForOutcome(rec.Odds, res, stake)
 
 		// update record
 		if res == "" {
