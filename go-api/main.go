@@ -11,7 +11,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -57,7 +56,7 @@ func main() {
 	)
 
 	var err error
-	DB, sqlDB, err := openGormIPv4(dsn, gLogger)
+	DB, _, err := openGormIPv4(dsn, gLogger)
 	if err != nil {
 		log.Fatalf("[DB] connect failed: %v", err)
 	}
