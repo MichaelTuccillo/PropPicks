@@ -1,13 +1,9 @@
 {
   "builds": [
-    {
-      "src": "web-frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "web-frontend/dist/web-frontend" }
-    }
+    { "src": "package.json", "use": "@vercel/static-build" }
   ],
-  "routes": [
-    { "src": "/assets/(.*)", "dest": "web-frontend/dist/web-frontend/assets/$1" },
-    { "src": "/(.*)", "dest": "web-frontend/dist/web-frontend/index.html" }
+  "outputDirectory": "dist/web-frontend/browser",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
