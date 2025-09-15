@@ -36,6 +36,6 @@ export class AiSlipService {
   private base = `${environment.apiBase}`;
 
   generateSlip(filters: AiFilters): Observable<AiBetSlip> {
-    return this.http.post<AiBetSlip>(this.base, { filters });
+    return this.http.post<AiBetSlip>(`${this.base}/generate-slip`, { filters });
   }
 }
