@@ -1,37 +1,40 @@
 <div class="page">
-  <!-- Filters -->
-  <div class="filters">
-    <mat-chip-listbox aria-label="Sport filter">
-      <mat-chip-option
-        *ngFor="let s of sports()"
-        [selected]="sport() === s"
-        (click)="setSport(s)">{{ s }}</mat-chip-option>
-    </mat-chip-listbox>
+  <div class="section">
+    <!-- Filters -->
+    <h3 class="section-title">Model Performance</h3>
+      <div class="filters">
+        <mat-chip-listbox aria-label="Sport filter">
+          <mat-chip-option
+            *ngFor="let s of sports()"
+            [selected]="sport() === s"
+            (click)="setSport(s)">{{ s }}</mat-chip-option>
+        </mat-chip-listbox>
 
-    <mat-button-toggle-group [value]="mode()" (valueChange)="mode.set($event)">
-      <mat-button-toggle value="Single">Single</mat-button-toggle>
-      <mat-button-toggle value="SGP">SGP</mat-button-toggle>
-      <mat-button-toggle value="SGP+">SGP+</mat-button-toggle>
-    </mat-button-toggle-group>
-  </div>
+        <mat-button-toggle-group [value]="mode()" (valueChange)="mode.set($event)">
+          <mat-button-toggle value="Single">Single</mat-button-toggle>
+          <mat-button-toggle value="SGP">SGP</mat-button-toggle>
+          <mat-button-toggle value="SGP+">SGP+</mat-button-toggle>
+        </mat-button-toggle-group>
+      </div>
 
-  <!-- Summary cards (All-time W-L and ROI) -->
-  <div class="summary-grid" *ngIf="summaries().length">
-    <mat-card class="summary-card" *ngFor="let c of summaries(); trackBy: trackModel">
-      <div class="summary-title">{{ c.name }}</div>
-      <div class="summary-meta">All-time W-L & ROI</div>
-      <mat-chip-set class="meta-chips">
-        <mat-chip class="wl-chip" aria-label="All-time wins and losses">{{ c.all_wl }}</mat-chip>
-        <mat-chip
-          class="units-chip"
-          [ngClass]="{ 'pos': c.all_units >= 0, 'neg': c.all_units < 0 }"
-          aria-label="All-time ROI in units"
-        >
-          ROI {{ c.all_units_str }}
-        </mat-chip>
-      </mat-chip-set>
-    </mat-card>
-  </div>
+      <!-- Summary cards (All-time W-L and ROI) -->
+      <div class="summary-grid" *ngIf="summaries().length">
+        <mat-card class="summary-card" *ngFor="let c of summaries(); trackBy: trackModel">
+          <div class="summary-title">{{ c.name }}</div>
+          <div class="summary-meta">All-time W-L & ROI</div>
+          <mat-chip-set class="meta-chips">
+            <mat-chip class="wl-chip" aria-label="All-time wins and losses">{{ c.all_wl }}</mat-chip>
+            <mat-chip
+              class="units-chip"
+              [ngClass]="{ 'pos': c.all_units >= 0, 'neg': c.all_units < 0 }"
+              aria-label="All-time ROI in units"
+            >
+              ROI {{ c.all_units_str }}
+            </mat-chip>
+          </mat-chip-set>
+        </mat-card>
+      </div>
+    </div>
 
   <!-- Chart -->
   <div class="section">

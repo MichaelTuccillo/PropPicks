@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment.prod';
 
 export interface GameDTO {
   id: string;
@@ -13,7 +14,7 @@ export interface GameDTO {
 
 @Injectable({ providedIn: 'root' })
 export class GamesService {
-  private base = '/api'; // dev proxy will forward to 8080
+  private base = `${environment.apiBase}`; // dev proxy will forward to 8080
   constructor(private http: HttpClient) {}
 
   listGames(sport: string, days = 7): Observable<{ games: GameDTO[] }> {
