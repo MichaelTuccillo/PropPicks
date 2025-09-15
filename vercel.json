@@ -1,0 +1,13 @@
+{
+  "builds": [
+    {
+      "src": "web-frontend/package.json",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "web-frontend/dist/web-frontend" }
+    }
+  ],
+  "routes": [
+    { "src": "/assets/(.*)", "dest": "web-frontend/dist/web-frontend/assets/$1" },
+    { "src": "/(.*)", "dest": "web-frontend/dist/web-frontend/index.html" }
+  ]
+}
