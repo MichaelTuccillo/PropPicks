@@ -10,6 +10,22 @@ import (
 var cookieName = getenv("COOKIE_NAME", "pp_auth")
 var cookieSecure = os.Getenv("COOKIE_SECURE") == "true"
 
+// optional cookie domain for subdomain setups (e.g., api.yourdomain.com + www.yourdomain.com)
+var cookieDomain = os.Getenv("COOKIE_DOMAIN")
+
+// let env control SameSite: "none" | "lax" | "strict"  (default: lax)
+var cookieSameSite = func() http.SameSite {
+	switch strings.ToLower(os.Getenv("COOKIE_SAMESITE")) {
+	case "none":
+		return http.SameSiteNoneMode
+	case "strict":
+		return http.SameSiteStrictMode
+	default:
+		return http.SameSiteLaxMode
+	}
+}()
+
+
 // userKeyFromRequest extracts the authenticated user key from the JWT cookie,
 // falling back to the X-PP-User header for development.
 func userKeyFromRequest(r *http.Request) string {

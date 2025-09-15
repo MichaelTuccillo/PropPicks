@@ -73,11 +73,17 @@ func main() {
 
 	r := chi.NewRouter()
 
-	// CORS first
 	corsOrigin := envOr("CORS_ORIGIN", "http://localhost:4200")
+	// allow comma-separated list of origins
+	var origins []string
+	for _, p := range strings.Split(corsOrigin, ",") {
+		if o := strings.TrimRight(strings.TrimSpace(p), "/"); o != "" {
+			origins = append(origins, o)
+		}
+	}
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{strings.TrimRight(corsOrigin, "/")},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedOrigins:   origins,
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Requested-With"},
 		ExposedHeaders:   []string{"Set-Cookie"},
 		AllowCredentials: true,
@@ -109,6 +115,10 @@ func main() {
 
 	// OpenAI: generate slip
 	r.Post("/api/generate-slip", handleGenerateSlip)
+
+	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	})
 
 	addr := ":" + envOr("PORT", "8080")
 	srv := &http.Server{

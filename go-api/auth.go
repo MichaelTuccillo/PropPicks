@@ -26,8 +26,9 @@ func setAuthCookie(w http.ResponseWriter, token string) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: cookieSameSite,
 		Secure:   cookieSecure,
+		Domain:   cookieDomain,
 		// 30 days:
 		Expires: time.Now().Add(30 * 24 * time.Hour),
 		MaxAge:  int((30 * 24 * time.Hour).Seconds()),
@@ -41,8 +42,9 @@ func clearAuthCookie(w http.ResponseWriter) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: cookieSameSite,
 		Secure:   cookieSecure,
+		Domain:   cookieDomain,
 		Expires:  time.Unix(0, 0),
 		MaxAge:   -1,
 	}
