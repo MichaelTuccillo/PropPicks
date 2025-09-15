@@ -14,9 +14,10 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// openGormIPv4 opens a *gorm.DB using a pgx stdlib *sql.DB underneath,
-// and forces IPv4 both at DNS resolution time and at connect time.
-// This avoids Render -> Supabase/Neon IPv6 egress issues.
+// openGormIPv4 opens a *gorm.DB using pgx stdlib.
+// - Forces IPv4 at DNS + dial (Render egress)
+// - Uses SIMPLE protocol (no prepares)
+// - Disables pgx statement cache (prevents "prepared statement already exists" with PgBouncer)
 func openGormIPv4(dsn string, gl logger.Interface) (*gorm.DB, *sql.DB, error) {
 	if dsn == "" {
 		dsn = os.Getenv("DATABASE_URL")
@@ -30,9 +31,8 @@ func openGormIPv4(dsn string, gl logger.Interface) (*gorm.DB, *sql.DB, error) {
 		return nil, nil, err
 	}
 
-	// 1) Prefer IPv4 when resolving the DB host.
+	// Prefer IPv4 when resolving
 	cfg.LookupFunc = func(ctx context.Context, host string) ([]string, error) {
-		// Try A records (IPv4) first.
 		ipAddrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
 		if err == nil && len(ipAddrs) > 0 {
 			v4 := make([]string, 0, len(ipAddrs))
@@ -45,25 +45,27 @@ func openGormIPv4(dsn string, gl logger.Interface) (*gorm.DB, *sql.DB, error) {
 				return v4, nil
 			}
 		}
-		// Fallback to default host lookup (may include IPv6 if no IPv4 available).
 		return net.DefaultResolver.LookupHost(ctx, host)
 	}
 
-	// 2) Force an IPv4 socket for the actual TCP connection.
+	// KEY: no prepared statements at all
+	cfg.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	cfg.StatementCacheCapacity = 0 // disable pgx stmt cache
+
+	// Force IPv4 socket
 	cfg.DialFunc = func(ctx context.Context, _ string, addr string) (net.Conn, error) {
 		d := &net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}
-		return d.DialContext(ctx, "tcp4", addr) // e.g., "1.2.3.4:5432"
+		return d.DialContext(ctx, "tcp4", addr)
 	}
 
-	// Build *sql.DB from pgx config.
 	sqlDB := stdlib.OpenDB(*cfg)
 
-	// Reasonable pool settings for small Render instances.
+	// Pool settings
 	sqlDB.SetMaxOpenConns(10)
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetConnMaxLifetime(30 * time.Minute)
 
-	// Fast fail if unreachable.
+	// Fast fail
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	if err := sqlDB.PingContext(ctx); err != nil {
@@ -73,7 +75,12 @@ func openGormIPv4(dsn string, gl logger.Interface) (*gorm.DB, *sql.DB, error) {
 	if gl == nil {
 		gl = logger.Default.LogMode(logger.Warn)
 	}
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{Logger: gl})
+	gdb, err := gorm.Open(postgres.New(postgres.Config{
+		Conn: sqlDB,
+	}), &gorm.Config{
+		Logger:      gl,
+		PrepareStmt: false, // be explicit: GORM should NOT use prepares
+	})
 	if err != nil {
 		return nil, sqlDB, err
 	}
