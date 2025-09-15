@@ -57,15 +57,10 @@ func main() {
 	)
 
 	var err error
-	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: gLogger})
+	DB, sqlDB, err := openGormIPv4(dsn, gLogger)
 	if err != nil {
 		log.Fatalf("[DB] connect failed: %v", err)
 	}
-	// Healthy pool
-	sqlDB, _ := DB.DB()
-	sqlDB.SetMaxOpenConns(10)
-	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetConnMaxLifetime(30 * time.Minute)
 
 	if err := DB.AutoMigrate(&User{}, &PastBetRecord{}, &UserModelStat{}); err != nil {
 		log.Fatalf("[DB] auto-migrate failed: %v", err)

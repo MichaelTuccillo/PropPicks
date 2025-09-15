@@ -10,51 +10,57 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
-func openDB() *sql.DB {
-	dsn := os.Getenv("DATABASE_URL")
+// openGormIPv4 opens a *gorm.DB using a pgx stdlib *sql.DB underneath,
+// and forces IPv4 ("tcp4") so Render can reach Supabase/Neon even when AAAA resolves first.
+func openGormIPv4(dsn string, gl logger.Interface) (*gorm.DB, *sql.DB, error) {
 	if dsn == "" {
-		log.Fatal("[DB] missing DATABASE_URL")
+		dsn = os.Getenv("DATABASE_URL")
+	}
+	if dsn == "" {
+		return nil, nil, ErrMissingDSN
 	}
 
-	// Parse DSN and force IPv4 to avoid IPv6-only routes on some hosts
 	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
-		log.Fatalf("[DB] parse DSN: %v", err)
+		return nil, nil, err
 	}
-	cfg.DialFunc = func(ctx context.Context, network, addr string) (net.Conn, error) {
+	// Force IPv4
+	cfg.DialFunc = func(ctx context.Context, _ string, addr string) (net.Conn, error) {
 		d := &net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}
-		// Force IPv4
 		return d.DialContext(ctx, "tcp4", addr)
 	}
 
-	db := stdlib.OpenDB(*cfg)
+	sqlDB := stdlib.OpenDB(*cfg)
 
-	// Reasonable pool settings for Render free/starter dynos
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(10)
-	db.SetConnMaxLifetime(30 * time.Minute)
+	// Pooling sensible for Render starter
+	sqlDB.SetMaxOpenConns(10)
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetConnMaxLifetime(30 * time.Minute)
 
 	// Fast fail if unreachable
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	if err := db.PingContext(ctx); err != nil {
-		log.Fatalf("[DB] connect failed: %v", err)
+	if err := sqlDB.PingContext(ctx); err != nil {
+		return nil, sqlDB, err
 	}
 
-	log.Println("[DB] connected")
-	return db
+	if gl == nil {
+		gl = logger.Default.LogMode(logger.Warn)
+	}
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{Logger: gl})
+	if err != nil {
+		return nil, sqlDB, err
+	}
+	return gdb, sqlDB, nil
 }
 
+// Small sentinel error so callers get a clear message if DSN is missing.
+var ErrMissingDSN = &dsnError{"missing DATABASE_URL or empty DSN"}
 
-// AutoMigrate all app tables.
-// NOTE: PastBetRecord is defined in past_bets.go
-//       User is your auth user model (already in your project)
-func autoMigrate(db *gorm.DB) error {
-	return db.AutoMigrate(
-		&User{},
-		&PastBetRecord{},
-		&UserModelStat{},
-	)
-}
+type dsnError struct{ s string }
+func (e *dsnError) Error() string { return e.s }
