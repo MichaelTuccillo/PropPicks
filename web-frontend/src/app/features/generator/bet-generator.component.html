@@ -126,7 +126,7 @@
         <mat-label>Min odds (American)</mat-label>
         <input
           matInput
-          type="number"
+          type="text"
           [attr.step]="5"
           [value]="minOddsText()"
           (input)="onOddsInput('min', $event)"
@@ -139,7 +139,7 @@
         <mat-label>Max odds (American)</mat-label>
         <input
           matInput
-          type="number"
+          type="text"
           [attr.step]="5"
           [value]="maxOddsText()"
           (input)="onOddsInput('max', $event)"
