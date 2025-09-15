@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
+	"github.com/jackc/pgconn"
 	"github.com/joho/godotenv"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -41,30 +43,53 @@ func main() {
 	if dsn == "" {
 		log.Fatal("[DB] DATABASE_URL is not set. Refusing to start.")
 	}
+	// local only: allow sslmode=disable if using localhost
 	if strings.Contains(dsn, "localhost") && !strings.Contains(dsn, "sslmode=") {
-		if strings.Contains(dsn, "?") { dsn += "&sslmode=disable" } else { dsn += "?sslmode=disable" }
+		if strings.Contains(dsn, "?") {
+			dsn += "&sslmode=disable"
+		} else {
+			dsn += "?sslmode=disable"
+		}
 	}
 
-	// Quieter GORM logger & slow threshold
+	// Quieter GORM logger
 	gLogger := logger.New(
 		log.New(os.Stdout, "", log.LstdFlags),
 		logger.Config{
-			SlowThreshold: 1500 * time.Millisecond, // warn only if really slow
-			LogLevel:      logger.Warn,             // drop to Warn (not Info)
+			SlowThreshold: 1500 * time.Millisecond,
+			LogLevel:      logger.Warn,
 			Colorful:      true,
 		},
 	)
 
 	var err error
-	DB, _, err := openGormIPv4(dsn, gLogger)
+	DB, _, err = openGormIPv4(dsn, gLogger) // pgx simple protocol + IPv4 enforced
 	if err != nil {
 		log.Fatalf("[DB] connect failed: %v", err)
 	}
+	log.Println("[DB] connected")
 
-	if err := DB.AutoMigrate(&User{}, &PastBetRecord{}, &UserModelStat{}); err != nil {
-		log.Fatalf("[DB] auto-migrate failed: %v", err)
+	// ---- Safe AutoMigrate (Option 2)
+	if envOr("MIGRATE_ON_START", "true") == "true" {
+		// Only migrate when main table missing; avoids PgBouncer oddities
+		if !DB.Migrator().HasTable(&User{}) {
+			if err := DB.AutoMigrate(&User{}, &PastBetRecord{}, &UserModelStat{}); err != nil {
+				// tolerate 'relation exists' just in case of a race
+				var pgErr *pgconn.PgError
+				if errors.As(err, &pgErr) && pgErr.Code == "42P07" {
+					log.Printf("[DB] auto-migrate: table exists (42P07); continuing")
+				} else {
+					log.Fatalf("[DB] auto-migrate failed: %v", err)
+				}
+			} else {
+				log.Println("[DB] auto-migrate: done")
+			}
+		} else {
+			log.Println("[DB] tables present; skipping AutoMigrate")
+		}
 	}
 
+	// ---- Router & middleware
 	r := chi.NewRouter()
 
 	corsOrigin := envOr("CORS_ORIGIN", "http://localhost:4200")
@@ -83,7 +108,7 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
-	// Finish OPTIONS cleanly
+	// Finish bare OPTIONS quickly
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			if req.Method == http.MethodOptions {
@@ -94,6 +119,7 @@ func main() {
 		})
 	})
 
+	// ---- Routes
 	// Auth
 	r.Post("/api/auth/register", handleAuthRegister)
 	r.Post("/api/auth/sign-in", handleAuthSignIn)
@@ -110,6 +136,7 @@ func main() {
 	// OpenAI: generate slip
 	r.Post("/api/generate-slip", handleGenerateSlip)
 
+	// Health
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	})
