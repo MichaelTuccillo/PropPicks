@@ -11,7 +11,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
-	"github.com/jackc/pgconn"
 	"github.com/joho/godotenv"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -68,26 +67,6 @@ func main() {
 		log.Fatalf("[DB] connect failed: %v", err)
 	}
 	log.Println("[DB] connected")
-
-	// ---- Safe AutoMigrate (Option 2)
-	if envOr("MIGRATE_ON_START", "true") == "true" {
-		// Only migrate when main table missing; avoids PgBouncer oddities
-		if !DB.Migrator().HasTable(&User{}) {
-			if err := DB.AutoMigrate(&User{}, &PastBetRecord{}, &UserModelStat{}); err != nil {
-				// tolerate 'relation exists' just in case of a race
-				var pgErr *pgconn.PgError
-				if errors.As(err, &pgErr) && pgErr.Code == "42P07" {
-					log.Printf("[DB] auto-migrate: table exists (42P07); continuing")
-				} else {
-					log.Fatalf("[DB] auto-migrate failed: %v", err)
-				}
-			} else {
-				log.Println("[DB] auto-migrate: done")
-			}
-		} else {
-			log.Println("[DB] tables present; skipping AutoMigrate")
-		}
-	}
 
 	// ---- Router & middleware
 	r := chi.NewRouter()
