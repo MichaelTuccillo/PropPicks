@@ -126,10 +126,10 @@ func handleAuthDemoSignIn(w http.ResponseWriter, r *http.Request) {
 	resp := toDTO(u)
 	// attach id for client-side persistence
 	type withID struct {
-		UserDTO
+		userDTO
 		DemoID string `json:"demoId"`
 	}
-	writeJSON(w, http.StatusOK, withID{UserDTO: resp, DemoID: u.ID})
+	writeJSON(w, http.StatusOK, withID{userDTO: resp, DemoID: u.ID})
 }
 
 // POST /api/auth/demo-reset
