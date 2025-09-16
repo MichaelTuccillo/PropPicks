@@ -50,7 +50,7 @@ export class AuthService {
   // auth.service.ts
   tryDemo() {
     return this.http.post(
-      `${this.base}/auth/demo`,
+      `${this.base}/demo`,
       {},
       { withCredentials: true }
     );
