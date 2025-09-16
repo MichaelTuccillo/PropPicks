@@ -47,6 +47,16 @@ export class AuthService {
     return await firstValueFrom(this.register$({ email, password, displayName }));
   }
 
+  // auth.service.ts
+  tryDemo() {
+    return this.http.post(
+      `${this.base}/auth/demo`,
+      {},
+      { withCredentials: true }
+    );
+  }
+
+
   /**
    * Sign out QUICKLY:
    * - immediately clears local user

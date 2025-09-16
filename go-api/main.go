@@ -103,6 +103,8 @@ func main() {
 	r.Post("/api/auth/sign-in", handleAuthSignIn)
 	r.Post("/api/auth/sign-out", handleAuthSignOut)
 	r.Get("/api/auth/me", handleAuthMe)
+	
+	r.Post("/api/auth/demo", handleAuthDemoSignIn)
 
 	// Bets & stats
 	r.Get("/api/past-bets", handlePastBets)
