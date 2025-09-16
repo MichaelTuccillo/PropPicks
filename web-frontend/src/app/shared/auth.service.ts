@@ -1,10 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Subject, Observable, of, firstValueFrom } from 'rxjs';
-import { catchError, tap } from 'rxjs/operators';
+import { catchError, tap, map } from 'rxjs/operators';
 import { environment } from '../../environments/environment.prod';
 
 export type User = { id: string; email: string; displayName: string };
+type UserFromServer = { id: string; email: string; display_name?: string; displayName?: string };
+type DemoResponseFromServer = UserFromServer & { demoId?: string };
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -17,6 +19,12 @@ export class AuthService {
   user$ = this._user$.asObservable();
   user(): User | null { return this._user$.value; }
   isAuthed(): boolean { return !!this._user$.value; }
+
+  private normalizeUser = (u: UserFromServer): User => ({
+    id: u.id,
+    email: u.email,
+    displayName: u.displayName ?? u.display_name ?? '',
+  });
 
   /** Emits once at the moment sign-out begins; services use it to cancel HTTP */
   get logout$(): Observable<void> { return this._logout$.asObservable(); }
@@ -47,13 +55,20 @@ export class AuthService {
     return await firstValueFrom(this.register$({ email, password, displayName }));
   }
 
-  // auth.service.ts
   tryDemo() {
-    return this.http.post(
-      `${this.base}/demo`,
-      {},
-      { withCredentials: true }
-    );
+    const demoId = localStorage.getItem('demoId') || '';
+    return this.http
+      .post<DemoResponseFromServer>(
+        `${this.base}/demo`,
+        demoId ? { demoId } : {},
+        { withCredentials: true }
+      )
+      .pipe(
+        tap((res) => {
+          if (res?.demoId) localStorage.setItem('demoId', res.demoId);
+        }),
+        map(this.normalizeUser)
+      );
   }
 
 

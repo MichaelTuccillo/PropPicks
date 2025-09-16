@@ -13,6 +13,10 @@ import (
 
 /* ---------- DTOs ---------- */
 
+type demoSignInReq struct {
+	DemoID string `json:"demoId"`
+}
+
 type userDTO struct {
 	ID          string `json:"id"`
 	Email       string `json:"email"`
@@ -66,47 +70,66 @@ func handleAuthDemoSignIn(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusInternalServerError, "db not initialized")
 		return
 	}
-	if strings.ToLower(os.Getenv("DEMO_MODE")) != "true" {
+	if !isDemoEnabled() {
 		errorJSON(w, http.StatusForbidden, "demo mode disabled")
 		return
 	}
 
-	// Create a unique throwaway email under a reserved domain that we treat as "demo".
-	uid := newID()
-	email := "demo-" + uid + "@demo.local"
-	display := "Demo User"
+	var req demoSignInReq
+	_ = json.NewDecoder(r.Body).Decode(&req)
 
-	// Hash a dummy password (we won't ask for it, but keeps the row consistent).
-	hash, _ := bcrypt.GenerateFromPassword([]byte("demo"), 10)
+	var u User
+	reused := false
 
-	u := User{
-		ID:           uid,
-		Email:        strings.ToLower(email),
-		DisplayName:  display,
-		PasswordHash: string(hash),
-	}
-	if err := DB.Create(&u).Error; err != nil {
-		errorJSON(w, http.StatusInternalServerError, "db error")
-		return
+	// (1) Reuse existing demo user if DEMO_PERSIST and valid demoId provided
+	if strings.ToLower(os.Getenv("DEMO_PERSIST")) == "true" && req.DemoID != "" {
+		if err := DB.First(&u, "id = ? AND email LIKE ?", req.DemoID, "demo-%@demo.local").Error; err == nil {
+			reused = true
+		}
 	}
 
-	// Issue auth cookie (same as normal sign-in)
-	tok, err := signToken(u.ID, 24*30) // 30 days
+	// (2) Otherwise create a brand-new demo user
+	if !reused {
+		uid := newID()
+		email := "demo-" + uid + "@demo.local"
+		hash, _ := bcrypt.GenerateFromPassword([]byte("demo"), 10)
+
+		u = User{
+			ID:           uid,
+			Email:        strings.ToLower(email),
+			DisplayName:  "Demo User",
+			PasswordHash: string(hash),
+		}
+		if err := DB.Create(&u).Error; err != nil {
+			errorJSON(w, http.StatusInternalServerError, "db error")
+			return
+		}
+
+		// Clone real data from the source user and recompute stats
+		if err := DB.Transaction(func(tx *gorm.DB) error {
+			return cloneRealDataToDemo(u.ID, tx)
+		}); err != nil {
+			// Not fatal; user can still log in with empty data
+			// log.Println("[demo] clone error:", err)
+		}
+	}
+
+	// Issue auth cookie
+	tok, err := signToken(u.ID, 24*30)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "token error")
 		return
 	}
 	setAuthCookie(w, tok)
 
-	// Optionally seed some demo data so the account looks alive.
-	if strings.ToLower(os.Getenv("DEMO_SEED_ON_LOGIN")) == "true" {
-		if err := seedDemoData(u.ID); err != nil {
-			// Seeding is best-effort; don't block login.
-			// log.Println("[demo] seed error:", err)
-		}
+	// Return the demoId so the client can persist it in localStorage
+	resp := toDTO(u)
+	// attach id for client-side persistence
+	type withID struct {
+		UserDTO
+		DemoID string `json:"demoId"`
 	}
-
-	writeJSON(w, http.StatusOK, toDTO(u))
+	writeJSON(w, http.StatusOK, withID{UserDTO: resp, DemoID: u.ID})
 }
 
 // POST /api/auth/demo-reset
