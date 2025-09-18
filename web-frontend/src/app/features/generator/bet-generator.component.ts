@@ -519,14 +519,33 @@ export class BetGeneratorComponent implements OnInit {
 
     const stake = this.units();
 
+    // Map AI legs -> backend BetLeg shape (player/team/market/line/odds)
+    const rawLegs = Array.isArray((s as any).legs) ? (s as any).legs : [];
+    const legs = rawLegs.map((l: any) => ({
+      market: l?.market ?? l?.type ?? 'Leg',
+      line:   l?.line ?? '',
+      odds:   l?.odds ?? '',
+      // prefer player label for readability in UI; fall back to team/selection
+      player: l?.pick ?? l?.selection ?? l?.player ?? '',
+      team:   l?.team ?? ''
+    })).filter((l: any) => String(l.market || '').trim() !== '');
+
+    // If the user chose Single but legs>1 (or vice versa), resolve reasonably
+    const resolvedType: BetMode =
+      this.mode() === 'Single'
+        ? 'Single'
+        : (legs.length <= 1 ? 'Single' : this.mode());
+
     const payload: any = {
-      type: this.mode(),
-      date: new Date().toISOString(),
+      type:  resolvedType,
+      date:  new Date().toISOString(),
       model: Array.from(this.selectedIds())[0] || '',
       sport: this.sport(),
       event: (s as any).event || (s as any).title || 'Bet Slip',
-      odds: oddsText,
+      odds:  oddsText,
       units: stake,
+      // >>> CRUCIAL: send the legs so the backend can store them
+      legs
     };
 
     this.past.save(payload).subscribe({
