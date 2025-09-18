@@ -17,12 +17,14 @@ import { StatsService, StatRow } from '../../shared/stats.service';
 import { PastBetsService, PastBet } from '../../shared/past-bets.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
+type LegVM = { market: string; pick?: string; line?: string; odds?: string; result?: 'win'|'loss'|'push' };
 type RecentRow = {
   id: string;
   date: string;
   modelName: string;
   sport: string;
   event: string;
+  legs?: LegVM[];               // NEW: show legs under the event
   betType: 'Single' | 'SGP' | 'SGP+';
   combinedOdds: string;
   result: 'win' | 'loss' | 'push' | null;
@@ -124,14 +126,12 @@ export class DashboardComponent {
       let wins = 0, losses = 0, units = 0;
 
       if (currentSport === 'All') {
-        // Aggregate across all sports (include any 'ALL' summary rows too)
         for (const r of list) {
           wins   += r.wins   ?? 0;
           losses += r.losses ?? 0;
           units  += r.units  ?? 0;
         }
       } else {
-        // Match specific sport (case-insensitive); ignore 'ALL' here
         const row = list.find(r => (r.sport || '').toUpperCase() === currentSport.toUpperCase());
         wins   = row?.wins   ?? 0;
         losses = row?.losses ?? 0;
@@ -191,9 +191,15 @@ export class DashboardComponent {
 
   recent = computed<RecentRow[]>(() => {
     const list = this.bets() ?? [];
-    return list.map(b => ({
-      id: b.id, date: b.date, modelName: b.model, sport: b.sport, event: b.event,
-      betType: b.type, combinedOdds: b.odds,
+    return list.map((b: any) => ({
+      id: b.id,
+      date: b.date,
+      modelName: b.model,
+      sport: b.sport,
+      event: b.event,
+      legs: Array.isArray(b.legs) ? b.legs : undefined, // NEW: pass through if present
+      betType: b.type,
+      combinedOdds: b.odds,
       result: (b.result ?? '') as any || null,
       resultUnits: typeof b.resultUnits === 'number' ? b.resultUnits : null
     }));

@@ -13,17 +13,27 @@ import (
 
 /* ===================== Public JSON (API) ====================== */
 
+type BetLeg struct {
+	Team   string  `json:"team,omitempty"`
+	Player string  `json:"player,omitempty"`
+	Market string  `json:"market"`           // e.g., "PTS", "AST", "ML"
+	Line   string  `json:"line,omitempty"`   // e.g., "25+", "25.5", "+1.5"
+	Odds   string  `json:"odds,omitempty"`   // e.g., "-110", "+140"
+	Result *string `json:"result,omitempty"` // "win"|"loss"|"push"|nil
+}
+
 type PastBet struct {
-	ID          string  `json:"id"`
-	Type        string  `json:"type"`  // Single | SGP | SGP+
-	Date        string  `json:"date"`  // ISO 8601
-	Model       string  `json:"model"`
-	Sport       string  `json:"sport"`
-	Event       string  `json:"event"`
-	Odds        string  `json:"odds"`                   // e.g., "+450" or "-115"
-	Units       float64 `json:"units,omitempty"`        // NEW: stake (units)
-	Result      string  `json:"result,omitempty"`       // "win" | "loss" | "push"
-	ResultUnits float64 `json:"resultUnits,omitempty"`  // +/- units for *this bet's stake*
+	ID          string   `json:"id"`
+	Type        string   `json:"type"`  // Single | SGP | SGP+
+	Date        string   `json:"date"`  // ISO 8601
+	Model       string   `json:"model"`
+	Sport       string   `json:"sport"`
+	Event       string   `json:"event"` // human summary
+	Legs        []BetLeg `json:"legs,omitempty"`
+	Odds        string   `json:"odds"`                  // overall/parlay odds (e.g., "+450")
+	Units       float64  `json:"units,omitempty"`       // stake (units)
+	Result      string   `json:"result,omitempty"`      // "win" | "loss" | "push"
+	ResultUnits float64  `json:"resultUnits,omitempty"` // +/- units for this bet
 }
 
 /* ===================== DB models ====================== */
@@ -35,10 +45,10 @@ type PastBetRecord struct {
 	Date        time.Time `gorm:"index:idx_past_user_date_created,priority:2;type:timestamptz;not null"`
 	Model       string    `gorm:"type:text;not null"`
 	Sport       string    `gorm:"type:text;not null"`
-	Event       string    `gorm:"type:text;not null"`
+	Event       string    `gorm:"type:text;not null"` // stores summary + packed JSON legs (see helpers)
 	Odds        string    `gorm:"type:text;not null"`
-	Stake       float64   `gorm:"not null;default:1"` // NEW: stake in units
-	Result      *string   `gorm:"type:text"`
+	Stake       float64   `gorm:"not null;default:1"` // stake in units
+	Result      *string
 	ResultUnits *float64
 	CreatedAt   time.Time `gorm:"index:idx_past_user_date_created,priority:3;autoCreateTime"`
 	UpdatedAt   time.Time `gorm:"autoUpdateTime"`
@@ -48,7 +58,7 @@ type UserModelStat struct {
 	ID        uint      `gorm:"primaryKey"`
 	UserKey   string    `gorm:"index:idx_user_model_sport_mode,unique;type:text;not null"`
 	Model     string    `gorm:"index:idx_user_model_sport_mode,unique;type:text;not null"`
-	Sport     string    `gorm:"index:idx_user_model_sport_mode,unique;type:text;not null"` // NFL/NBA/NHL/MLB or "ALL"
+	Sport     string    `gorm:"index:idx_user_model_sport_mode,unique;type:text;not null"`          // NFL/NBA/NHL/MLB or "ALL"
 	Mode      string    `gorm:"index:idx_user_model_sport_mode,unique;type:text;not null;default:ALL"` // Single | SGP | SGP+ | ALL
 	Wins      int       `gorm:"not null;default:0"`
 	Losses    int       `gorm:"not null;default:0"`
@@ -58,6 +68,30 @@ type UserModelStat struct {
 	RoiPct    float64   `gorm:"not null;default:0"`
 	CreatedAt time.Time `gorm:"autoCreateTime"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime"`
+}
+
+/* ===================== Packing helpers (no schema change) ====================== */
+
+const legsMarker = "\n\n--LEGSJSON--"
+
+// Pack legs as JSON after a delimiter in Event (human summary + machine payload)
+func packEvent(summary string, legs []BetLeg) string {
+	if len(legs) == 0 {
+		return summary
+	}
+	b, _ := json.Marshal(legs)
+	return summary + legsMarker + string(b)
+}
+
+// Split Event back into (summary, legs). Backward compatible: no marker => no legs.
+func unpackEvent(event string) (summary string, legs []BetLeg) {
+	idx := strings.Index(event, legsMarker)
+	if idx < 0 {
+		return event, nil
+	}
+	summary = event[:idx]
+	_ = json.Unmarshal([]byte(event[idx+len(legsMarker):]), &legs)
+	return
 }
 
 /* ===================== In-memory fallback ====================== */
@@ -70,15 +104,17 @@ var (
 /* ===================== Helpers ====================== */
 
 func toPublic(b PastBetRecord) PastBet {
+	summary, legs := unpackEvent(b.Event)
 	out := PastBet{
 		ID:    b.ID,
 		Type:  b.Type,
 		Date:  b.Date.UTC().Format(time.RFC3339),
 		Model: b.Model,
 		Sport: b.Sport,
-		Event: b.Event,
+		Event: summary,
+		Legs:  legs,
 		Odds:  b.Odds,
-		Units: b.Stake, // NEW: expose stake to API
+		Units: b.Stake,
 	}
 	if b.Result != nil {
 		out.Result = *b.Result
@@ -139,6 +175,7 @@ func handlePastBets(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"bets": list})
 
 	case http.MethodPost:
+		// Accept legs in the public API; store them packed in Event
 		var bet PastBet
 		if err := json.NewDecoder(r.Body).Decode(&bet); err != nil {
 			errorJSON(w, http.StatusBadRequest, "invalid JSON")
@@ -152,10 +189,30 @@ func handlePastBets(w http.ResponseWriter, r *http.Request) {
 		if stake <= 0 {
 			stake = 1
 		}
-
 		id := newID()
 
 		if DB != nil {
+			summary := strings.TrimSpace(bet.Event)
+			// if no summary provided but legs exist, auto-build a readable title
+			if summary == "" && len(bet.Legs) > 0 {
+				parts := make([]string, 0, len(bet.Legs))
+				for _, lg := range bet.Legs {
+					title := strings.TrimSpace(strings.Join([]string{
+						firstNonEmpty(lg.Player, lg.Team),
+						lg.Market, lg.Line,
+					}, " "))
+					if lg.Odds != "" {
+						title += " (" + lg.Odds + ")"
+					}
+					if strings.TrimSpace(title) != "" {
+						parts = append(parts, title)
+					}
+				}
+				if len(parts) > 0 {
+					summary = strings.Join(parts, " · ")
+				}
+			}
+
 			rec := PastBetRecord{
 				ID:      id,
 				UserKey: userKey,
@@ -163,9 +220,9 @@ func handlePastBets(w http.ResponseWriter, r *http.Request) {
 				Date:    mustParse(bet.Date),
 				Model:   bet.Model,
 				Sport:   bet.Sport,
-				Event:   bet.Event,
+				Event:   packEvent(summary, bet.Legs), // <<< key line packs legs
 				Odds:    bet.Odds,
-				Stake:   stake, // NEW
+				Stake:   stake,
 			}
 			if err := DB.Create(&rec).Error; err != nil {
 				errorJSON(w, http.StatusInternalServerError, "db insert error")
@@ -176,7 +233,8 @@ func handlePastBets(w http.ResponseWriter, r *http.Request) {
 				errorJSON(w, http.StatusInternalServerError, "db trim error")
 				return
 			}
-			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+			// respond with the saved bet (unpacked) for immediate UI usage
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "bet": toPublic(rec)})
 			return
 		}
 
@@ -190,7 +248,7 @@ func handlePastBets(w http.ResponseWriter, r *http.Request) {
 		if len(pastByUser[userKey]) > 15 {
 			pastByUser[userKey] = pastByUser[userKey][len(pastByUser[userKey])-15:]
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "bet": row})
 
 	default:
 		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
