@@ -67,6 +67,14 @@ func main() {
 	}
 	log.Println("[DB] connected")
 
+	log.Println("[DB] running AutoMigrate...")
+
+	if err := DB.AutoMigrate(&User{}, &PastBetRecord{}, &UserModelStat{}); err != nil {
+		log.Fatalf("[DB] auto-migrate failed: %v", err)
+	}
+	
+	log.Println("[DB] AutoMigrate complete")
+	
 	// ---- Router & middleware
 	r := chi.NewRouter()
 
